@@ -4,14 +4,10 @@
 import numpy as np
 import pandas as pd
 
+from scipy.interpolate import UnivariateSpline
+
 def max_delta_by_spline(timepoint1, timepoint2, indata: pd.DataFrame) -> list:
     # TODO: make sure maxZ is what is expected/needed
     maxZ = np.apply_over_axes(np.max, indata[[timepoint1, timepoint2]], 1)
-    # deltaZ = indata[[timepoint2]].apply(lambda val: )
+    spline = UnivariateSpline(indata[[timepoint1]], indata[[timepoint2]])
     return list
-
-def smooth_spline(x, y):
-    pass
-
-def predict():
-    pass
