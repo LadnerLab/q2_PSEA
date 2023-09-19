@@ -57,7 +57,7 @@ data = data2.apply(
 input = pd.read_csv("../../example/input.csv")
 s = pd.read_csv("../../example/PV2species.csv", header=None)
 
-timepoint1="070060_D360.Pro_PV2T"
-timepoint2="070060_D540.Pro_PV2T"
+timepoint1 = "070060_D360.Pro_PV2T"
+timepoint2 = "070060_D540.Pro_PV2T"
 
 maxDelta = max_delta_by_spline(timepoint1, timepoint2, data)
