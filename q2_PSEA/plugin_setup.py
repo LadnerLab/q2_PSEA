@@ -2,7 +2,7 @@
 
 import q2_PSEA
 
-from q2_PSEA.actions.PSEAcode import PSEA
+from q2_PSEA.actions.PSEAcode import psea
 # TODO: tenative import until it is known what modules are required
 from qiime2.plugin import (
     Plugin, Str, Visualization
@@ -17,24 +17,25 @@ plugin = Plugin(
 
 # register PSEA function
 plugin.pipelines.register_function(
-    function=PSEA,
+    function=psea,
     inputs={},
     input_descriptions=None,
     parameters={
-        "data_fn": Str,
-        "exclude": Str
+        "data": Str,
+        "timepoints": Str
     },
     parameter_descriptions={
-        # TODO: verify the file is of Z scores
-        "data_fn": "Name of Z score matrix file",
-        # TODO: verify we want a TSV and that it identifies replicates
-        "exclude": "Name of tab-delimited file containing name of replicates"
-            " to exclude"
+        "data": "Name of Z score matrix file.",
+        "timepoints": "Name of tab-delimited file containing sequence names to"
+            " compare via smooth splining."
     },
-    outputs=[
-        ("zscore_scatter", Visualization)
-    ],
-    output_descriptions=None,
+    outputs=[("zscore_scatter", Visualization)],
+    output_descriptions={
+        "zscore_scatter": "Name of plot file visualization comparison between"
+            " two samples. This plot includes the smooth spline fit to the given"
+            " data and highlights the leading edge peptides for all"
+            " significant taxa."
+    },
     name="PSEA", # TODO: verify name
-    description="" # TODO: get a description
+    description="**ADD DESCRIPTION**" # TODO: get a description
 )

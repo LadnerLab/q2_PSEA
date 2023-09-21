@@ -4,14 +4,14 @@ from math import pow, log
 
 
 # TODO: make sure this is not supposed to be lower-case
-def PSEA(ctx, data_fn, exclude):
+def psea(ctx, data, timepoints):
     max_delta_by_spline = ctx.get_action("")
     
     # TODO: optimize dataframe creation by using pd.read_csv()
     scores = []
     columns = []
     indexes = []
-    with open(data_fn, "r") as data_fh:
+    with open(data, "r") as data_fh:
         # read matrix into memory
         lines = data_fh.readlines()
 
@@ -42,11 +42,13 @@ def PSEA(ctx, data_fn, exclude):
     # might need to catch an exception for no columns
     data2 = data1.drop(columns=exclude)
 
-    data = data2.apply(
+    out_data = data2.apply(
         lambda row: row.apply(lambda val: log(val, base) - offset)
     )
 
-    # TODO: user should be able to specify
+    # TODO:
+    # 1) user should be able to specify
+    # 2) format of files need to be redefined
     input = pd.read_csv("../../example/input.csv")
     s = pd.read_csv("../../example/PV2species.csv", header=None)
 
@@ -54,4 +56,4 @@ def PSEA(ctx, data_fn, exclude):
     timepoint1 = "070060_D360.Pro_PV2T"
     timepoint2 = "070060_D540.Pro_PV2T"
 
-    maxDelta = max_delta_by_spline(timepoint1, timepoint2, data)
+    maxDelta = max_delta_by_spline(timepoint1, timepoint2, out_data)
