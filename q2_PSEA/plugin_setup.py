@@ -1,8 +1,11 @@
 #! /usr/bin/env python
 
+import q2_PSEA
+
+from q2_PSEA.actions.PSEAcode import PSEA
 # TODO: tenative import until it is known what modules are required
 from qiime2.plugin import (
-    Plugin, Str, List
+    Plugin, Str, Visualization
 )
 
 # q2-PSEA plugin object
@@ -14,7 +17,7 @@ plugin = Plugin(
 
 # register PSEA function
 plugin.pipelines.register_function(
-    function=actions.PSEAcode,
+    function=PSEA,
     inputs={},
     input_descriptions=None,
     parameters={
@@ -28,7 +31,10 @@ plugin.pipelines.register_function(
         "exclude": "Name of tab-delimited file containing name of replicates"
             " to exclude"
     },
-    outputs=None,
+    outputs=[
+        ("zscore_scatter", Visualization)
+    ],
+    output_descriptions=None,
     name="PSEA", # TODO: verify name
     description="" # TODO: get a description
 )

@@ -1,11 +1,12 @@
 import pandas as pd
 
 from math import pow, log
-from MaxDeltabySpline import max_delta_by_spline
 
 
 # TODO: make sure this is not supposed to be lower-case
 def PSEA(ctx, data_fn, exclude):
+    max_delta_by_spline = ctx.get_action("")
+    
     # TODO: optimize dataframe creation by using pd.read_csv()
     scores = []
     columns = []
