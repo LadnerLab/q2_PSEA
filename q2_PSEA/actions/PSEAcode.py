@@ -4,6 +4,7 @@ from math import pow, log
 from MaxDeltabySpline import max_delta_by_spline
 
 
+# TODO: make sure this is not supposed to be lower-case
 def PSEA(ctx, data_fn, exclude):
     # TODO: optimize dataframe creation by using pd.read_csv()
     scores = []
@@ -44,9 +45,11 @@ def PSEA(ctx, data_fn, exclude):
         lambda row: row.apply(lambda val: log(val, base) - offset)
     )
 
+    # TODO: user should be able to specify
     input = pd.read_csv("../../example/input.csv")
     s = pd.read_csv("../../example/PV2species.csv", header=None)
 
+    # TODO: user should be able to specify
     timepoint1 = "070060_D360.Pro_PV2T"
     timepoint2 = "070060_D540.Pro_PV2T"
 

@@ -5,7 +5,7 @@ from setuptools import setup, find_packages
 
 
 setup(
-    name = "q2-long-gsea",
+    name = "q2-PSEA",
     version = versioneer.get_version(),
     cmdclass = versioneer.get_cmdclass(),
     packages = find_packages(),
@@ -14,9 +14,9 @@ setup(
     author_email = "ajh728@nau.edu",
     description = "",
     license = "",
-    url = "https://github.com/LadnerLab/q2-long-gsea",
+    url = "https://github.com/LadnerLab/q2-PSEA",
     entry_points = {
-        "qiime2.plugins": ["q2-long-gsea=q2_long_gsea.plugin_setup:plugin"]
+        "qiime2.plugins": ["q2-PSEA=q2_PSEA.plugin_setup:plugin"]
     },
     zip_safe = False
 )
