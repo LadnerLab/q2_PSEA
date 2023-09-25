@@ -7,19 +7,26 @@ import pandas as pd
 from scipy import interpolate
 
 
-def max_delta_by_spline(timepoint1, timepoint2, indata: pd.DataFrame) -> list:
+def max_delta_by_spline(timepoint1, timepoint2, indata: pd.DataFrame) -> tuple:
     """
 
     Parameters
     ----------
     timepoint1 : str
+        x values for which y values will be predicted 
 
     timepoint2 : str
+        values onto which a smooth cubic spline will be fit
 
     indata : pd.DataFrame
+        matrix of Z scores for sequence
 
     Returns
     -------
+    tuple
+        Contains maximum Z score, the difference (delta) in actual from
+        predicted Z scores, the spline values for timepoint1 (x) and
+        timepoint2 (y)
     """
     maxZ = np.apply_over_axes(np.max, indata.loc[:, [timepoint1, timepoint2]], 1)
 
@@ -35,7 +42,7 @@ def max_delta_by_spline(timepoint1, timepoint2, indata: pd.DataFrame) -> list:
     maxZ = pd.Series(data=[num for num in maxZ], index=indata.index)
     deltaZ = pd.Series(data=deltaZ, index=indata.index)
     
-    return [maxZ, deltaZ, smooth_spline(x), smooth_spline(y)]
+    return (maxZ, deltaZ, smooth_spline(x), smooth_spline(y))
 
 
 def spline(knots, y):

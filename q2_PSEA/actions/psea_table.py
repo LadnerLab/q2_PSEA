@@ -1,4 +1,5 @@
-from MaxDeltabySpline import max_delta_by_spline
+from max_delta_by_spline import max_delta_by_spline
+from psea import psea
 import pandas as pd
 
 from math import pow, log
@@ -61,3 +62,7 @@ timepoint1 = "070060_D360.Pro_PV2T"
 timepoint2 = "070060_D540.Pro_PV2T"
 
 maxDelta = max_delta_by_spline(timepoint1, timepoint2, data)
+maxZ = maxDelta[0]
+deltaZ = maxDelta[1]
+# TODO: add an option for the user to dictate the threshold
+table = psea(maxZ, deltaZ, threshold=0.75)
