@@ -23,4 +23,4 @@ def psea(maxZ: pd.Series, deltaZ: pd.Series, threshold: float):
     maxZ_above_thresh = np.where(maxZ > threshold)
     deltaZ_not_zero = np.where(deltaZ != 0)
     # create gene list
-    gene_list = deltaZ.iloc[np.intersect1d(maxZ_above_thresh, deltaZ_not_zero)]
+    gene_list = deltaZ.iloc[np.intersect1d(maxZ_above_thresh, deltaZ_not_zero)].sort_values(ascending=False)
