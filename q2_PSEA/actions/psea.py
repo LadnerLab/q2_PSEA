@@ -1,7 +1,13 @@
 import numpy as np
 import pandas as pd
 
-def psea(maxZ: pd.Series, deltaZ: pd.Series, threshold: float):
+def psea(
+        maxZ: pd.Series,
+        deltaZ: pd.Series,
+        threshold: float,
+        input: str, # rename this file?
+        species: str
+):
     """
 
     Parameters
@@ -24,3 +30,7 @@ def psea(maxZ: pd.Series, deltaZ: pd.Series, threshold: float):
     deltaZ_not_zero = np.where(deltaZ != 0)
     # create gene list
     gene_list = deltaZ.iloc[np.intersect1d(maxZ_above_thresh, deltaZ_not_zero)].sort_values(ascending=False)
+
+    # read and rename columns
+    term_gene = pd.read_csv(input)
+    term_gene.rename(columns={"annotation": "Term", "library_member": "Gene"}, inplace=True)
