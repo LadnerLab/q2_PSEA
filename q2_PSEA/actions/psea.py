@@ -1,3 +1,4 @@
+import gseapy as gp
 import numpy as np
 import pandas as pd
 
@@ -32,5 +33,4 @@ def psea(
     gene_list = deltaZ.iloc[np.intersect1d(maxZ_above_thresh, deltaZ_not_zero)].sort_values(ascending=False)
 
     # read and rename columns
-    term_gene = pd.read_csv(input)
-    term_gene.rename(columns={"annotation": "Term", "library_member": "Gene"}, inplace=True)
+    term_gene = pd.read_csv(input, sep="\t")
