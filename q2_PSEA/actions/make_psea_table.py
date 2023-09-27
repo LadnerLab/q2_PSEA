@@ -1,10 +1,19 @@
 import pandas as pd
 
+from max_delta_by_spline import max_delta_by_spline
+from psea import psea
 from math import pow, log
 
 
-# TODO: make sure this is not supposed to be lower-case
 def psea(ctx, data, timepoints):
+    """
+
+    Parameters
+    ----------
+
+    Returns
+    -------  
+    """
     max_delta_by_spline = ctx.get_action("")
     
     # TODO: optimize dataframe creation by using pd.read_csv()
@@ -46,14 +55,13 @@ def psea(ctx, data, timepoints):
         lambda row: row.apply(lambda val: log(val, base) - offset)
     )
 
-    # TODO:
-    # 1) user should be able to specify
-    # 2) format of files need to be redefined
-    input = pd.read_csv("../../example/input.csv")
-    s = pd.read_csv("../../example/PV2species.csv", header=None)
-
     # TODO: user should be able to specify
     timepoint1 = "070060_D360.Pro_PV2T"
     timepoint2 = "070060_D540.Pro_PV2T"
 
-    maxDelta = max_delta_by_spline(timepoint1, timepoint2, out_data)
+    maxDelta = max_delta_by_spline(timepoint1, timepoint2, data)
+    maxZ = maxDelta[0]
+    deltaZ = maxDelta[1]
+    # TODO: add an option for the user to dictate the threshold
+    # table = psea(maxZ, deltaZ, threshold=0.75)
+    table = psea(maxZ, deltaZ, 1.00, input)
