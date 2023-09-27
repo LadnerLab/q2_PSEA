@@ -56,7 +56,7 @@ def make_psea_table(ctx, data, timepoints):
     timepoint1 = "070060_D360.Pro_PV2T"
     timepoint2 = "070060_D540.Pro_PV2T"
 
-    maxDelta = max_delta_by_spline(timepoint1, timepoint2, out_data)
+    maxDelta = max_delta_by_spline([timepoint1, timepoint2], out_data)
     maxZ = maxDelta[0]
     deltaZ = maxDelta[1]
     # TODO: add an option for the user to dictate the threshold
