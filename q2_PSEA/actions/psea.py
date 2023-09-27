@@ -33,4 +33,8 @@ def psea(
     gene_list = deltaZ.iloc[np.intersect1d(maxZ_above_thresh, deltaZ_not_zero)].sort_values(ascending=False)
 
     # read and rename columns
-    term_gene = pd.read_csv(input, sep="\t")
+    # TODO: make sure we don't want a header
+    term_gene = pd.read_csv(input, sep="\t", header=None)
+
+    enr = gp.enrichr(gene_list=gene_list, gene_sets="KEGG_2016", outdir=None)
+    print(f"Enrichr: {enr}")
