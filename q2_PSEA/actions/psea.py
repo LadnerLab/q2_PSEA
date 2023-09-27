@@ -6,7 +6,7 @@ def psea(
         maxZ: pd.Series,
         deltaZ: pd.Series,
         threshold: float,
-        input: str, # rename this file?
+        input: str,
         species: str
 ):
     """

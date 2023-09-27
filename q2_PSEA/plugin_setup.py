@@ -2,7 +2,7 @@
 
 import q2_PSEA
 
-from q2_PSEA.actions.PSEAcode import psea
+from q2_PSEA.actions.make_psea_table import make_psea_table
 # TODO: tenative import until it is known what modules are required
 from qiime2.plugin import (
     Plugin, Str, Visualization
@@ -10,14 +10,14 @@ from qiime2.plugin import (
 
 # q2-PSEA plugin object
 plugin = Plugin(
-    "q2-PSEA", version=q2_PSEA.__version__,
+    "PSEA", version=q2_PSEA.__version__,
     website="https://github.com/LadnerLab/q2-PSEA.git",
     description="Qiime2 Plugin for PSEA." # TODO: get a description
 )
 
-# register PSEA function
+# register make_psea_table function
 plugin.pipelines.register_function(
-    function=psea,
+    function=make_psea_table,
     inputs={},
     input_descriptions=None,
     parameters={
@@ -36,6 +36,6 @@ plugin.pipelines.register_function(
             " data and highlights the leading edge peptides for all"
             " significant taxa."
     },
-    name="PSEA", # TODO: verify name
-    description="**ADD DESCRIPTION**" # TODO: get a description
+    name="Make PSEA Table",
+    description="" # TODO: get a description
 )

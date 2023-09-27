@@ -1,11 +1,9 @@
 import pandas as pd
 
-from max_delta_by_spline import max_delta_by_spline
-from psea import psea
 from math import pow, log
 
 
-def psea(ctx, data, timepoints):
+def make_psea_table(ctx, data, timepoints):
     """
 
     Parameters
@@ -14,7 +12,6 @@ def psea(ctx, data, timepoints):
     Returns
     -------  
     """
-    max_delta_by_spline = ctx.get_action("")
     
     # TODO: optimize dataframe creation by using pd.read_csv()
     scores = []
@@ -49,7 +46,7 @@ def psea(ctx, data, timepoints):
         axis=0
     )
     # might need to catch an exception for no columns
-    data2 = data1.drop(columns=exclude)
+    data2 = data1.drop(columns=[])
 
     out_data = data2.apply(
         lambda row: row.apply(lambda val: log(val, base) - offset)
@@ -59,9 +56,9 @@ def psea(ctx, data, timepoints):
     timepoint1 = "070060_D360.Pro_PV2T"
     timepoint2 = "070060_D540.Pro_PV2T"
 
-    maxDelta = max_delta_by_spline(timepoint1, timepoint2, data)
+    maxDelta = max_delta_by_spline(timepoint1, timepoint2, out_data)
     maxZ = maxDelta[0]
     deltaZ = maxDelta[1]
     # TODO: add an option for the user to dictate the threshold
     # table = psea(maxZ, deltaZ, threshold=0.75)
-    table = psea(maxZ, deltaZ, 1.00, input)
+    table = psea(maxZ, deltaZ, 1.00, "../../example/input.tsv")
