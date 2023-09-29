@@ -38,10 +38,8 @@ def make_psea_table():
     gs_res = gp.gsea(
         data=data,
         gene_sets="../../example/input.gmt",
-        cls="../../example/Vector.cls",
+        cls="../../example/Pro_PV2T.cls",
         permutation_type="gene_set",
-        min_size=1,
-        max_size=1000,
         threads=4
     )
 
