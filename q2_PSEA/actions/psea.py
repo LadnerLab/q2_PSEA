@@ -11,8 +11,8 @@ def make_psea_table():
     offset = 3
     power = pow(base, offset)
 
+    # table will also be used for GSEA processing
     data = read_table("../../example/IM0031_PV2T_25nt_raw_2mm_i1mm_Z-HDI75.tsv")
-    print(f"Zscore matrix: {data}")
     # data1 = data.apply(lambda row: power + row, axis=0)
     # data1 = data1.apply(
     #     lambda row: row.apply(lambda val: 1 if val < 1 else val),
@@ -34,6 +34,18 @@ def make_psea_table():
     #     maxZ, deltaZ, 1.00,
     #     "../../example/input.tsv", "../../example/PV2species.csv"
     # ) # for testing purposes
+
+    gs_res = gp.gsea(
+        data=data,
+        gene_sets="../../example/input.gmt",
+        cls="../../example/Vector.cls",
+        permutation_type="gene_set",
+        min_size=1,
+        max_size=1000,
+        threads=4
+    )
+
+    print(f"GSEA head: {gs_res.res2d.head()}")
 
 
 def max_delta_by_spline(timepoint1, timepoint2, indata: pd.DataFrame) -> tuple:
@@ -75,6 +87,7 @@ def max_delta_by_spline(timepoint1, timepoint2, indata: pd.DataFrame) -> tuple:
 
 
 def psea(
+        data: pd.DataFrame,
         maxZ: pd.Series,
         deltaZ: pd.Series,
         threshold: float,
@@ -98,18 +111,15 @@ def psea(
     Returns
     -------
     """
-    # grab indexes where condition is true
-    maxZ_above_thresh = np.where(maxZ > threshold)
-    deltaZ_not_zero = np.where(deltaZ != 0)
-    # create gene list
-    gene_list = deltaZ.iloc[np.intersect1d(maxZ_above_thresh, deltaZ_not_zero)].sort_values(ascending=False)
+    # # grab indexes where condition is true
+    # maxZ_above_thresh = np.where(maxZ > threshold)
+    # deltaZ_not_zero = np.where(deltaZ != 0)
+    # # create gene list
+    # gene_list = deltaZ.iloc[np.intersect1d(maxZ_above_thresh, deltaZ_not_zero)].sort_values(ascending=False)
 
-    # read and rename columns
-    # TODO: make sure we don't want a header
-    term_gene = pd.read_csv(input, sep="\t", header=None)
-
-    enr = gp.enrichr(gene_list=gene_list, gene_sets="KEGG_2016", outdir=None)
-    print(f"Enrichr: {enr}")
+    # # read and rename columns
+    # # TODO: make sure we don't want a header
+    # term_gene = pd.read_csv(input, sep="\t", header=None)
 
 
 def read_table(file_path):
@@ -161,4 +171,4 @@ def spline(knots, y):
     return interpolate.BSpline(t, c, k)
 
 
-make_psea_table()  # remove
+make_psea_table()  # remove after plugin code has been full setup
