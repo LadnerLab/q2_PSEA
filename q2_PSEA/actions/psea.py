@@ -40,6 +40,8 @@ def make_psea_table():
         gene_sets="../../example/input.gmt",
         cls="../../example/Pro_PV2T.cls",
         permutation_type="gene_set",
+        min_size=1,
+        max_size=1000,
         threads=4
     )
 
@@ -149,7 +151,7 @@ def read_table(file_path):
 
 
 def spline(knots, y):
-    """<description>
+    """
 
     Parameters
     ----------
