@@ -35,18 +35,6 @@ def make_psea_table():
     #     "../../example/input.tsv", "../../example/PV2species.csv"
     # ) # for testing purposes
 
-    gs_res = gp.gsea(
-        data=data,
-        gene_sets="../../example/input.gmt",
-        cls="../../example/Pro_PV2T.cls",
-        permutation_type="gene_set",
-        min_size=1,
-        max_size=1000,
-        threads=4
-    )
-
-    print(f"GSEA head: {gs_res.res2d.head()}")
-
 
 def max_delta_by_spline(timepoint1, timepoint2, indata: pd.DataFrame) -> tuple:
     """
@@ -87,7 +75,8 @@ def max_delta_by_spline(timepoint1, timepoint2, indata: pd.DataFrame) -> tuple:
 
 
 def psea(
-        data: pd.DataFrame,
+        data: pd.DataFrame, # TODO: figure out if this is actually needed for
+                            # process
         maxZ: pd.Series,
         deltaZ: pd.Series,
         threshold: float,
@@ -111,15 +100,26 @@ def psea(
     Returns
     -------
     """
+    # TODO: figure out how to integrate into gsea function
     # # grab indexes where condition is true
     # maxZ_above_thresh = np.where(maxZ > threshold)
     # deltaZ_not_zero = np.where(deltaZ != 0)
     # # create gene list
     # gene_list = deltaZ.iloc[np.intersect1d(maxZ_above_thresh, deltaZ_not_zero)].sort_values(ascending=False)
 
-    # # read and rename columns
-    # # TODO: make sure we don't want a header
-    # term_gene = pd.read_csv(input, sep="\t", header=None)
+    # read and rename columns
+    gene_set = pd.read_csv(input, sep="\t", header=None)
+
+    # TODO: make sure to add other parameters
+    return gp.gsea(
+        data=data,
+        gene_set=gene_set,
+        cls="../../example/Pro_PV2T.cls",
+        permutation_type="gene_set", # TODO: force gene set?
+        min_size=min_size,
+        max_size=max_size,
+        threads=threads
+    )
 
 
 def read_table(file_path):
@@ -151,7 +151,8 @@ def read_table(file_path):
 
 
 def spline(knots, y):
-    """
+    """Creates spline object from which a prediction can be made based on given
+    y-values
 
     Parameters
     ----------
@@ -162,6 +163,8 @@ def spline(knots, y):
     Returns
     -------
     BSpline
+        Spline object from which predictions can be made given a set of
+        x-values
     """
     x = range(0, len(y))
     x_new = np.linspace(0, 1, knots+2)[1:-1]
