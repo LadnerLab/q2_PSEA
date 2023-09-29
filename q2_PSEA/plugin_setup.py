@@ -2,7 +2,7 @@
 
 import q2_PSEA
 
-from q2_PSEA.actions.make_psea_table import make_psea_table
+from q2_PSEA.actions.psea import make_psea_table
 from qiime2.plugin import (
     Plugin, Str, Visualization
 )
@@ -21,11 +21,14 @@ plugin.pipelines.register_function(
     inputs={},
     input_descriptions=None,
     parameters={
-        "data": Str,
+        "scores_file": Str,
+        "gene_set": Str,
         "timepoints": Str
     },
     parameter_descriptions={
-        "data": "Name of Z score matrix file.",
+        "scores_file": "Name of Z score matrix file.",
+        "gene_set": "Name of file containing information about viruses and"
+            " their peptides.",
         "timepoints": "Name of tab-delimited file containing sequence names to"
             " compare via smooth splining."
     },

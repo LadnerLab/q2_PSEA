@@ -6,37 +6,39 @@ from math import pow, log
 from scipy import interpolate
 
 
-def make_psea_table():
+def make_psea_table(ctx, scores_file, gene_set, timepoints):
     base = 2
     offset = 3
     power = pow(base, offset)
 
-    # table will also be used for GSEA processing
-    data = read_table("../../example/IM0031_PV2T_25nt_raw_2mm_i1mm_Z-HDI75.tsv")
-    # data1 = data.apply(lambda row: power + row, axis=0)
-    # data1 = data1.apply(
-    #     lambda row: row.apply(lambda val: 1 if val < 1 else val),
-    #     axis=0
-    # )
-    # # might need to catch an exception for no columns
-    # data2 = data1.drop(columns=[])
+    data = read_scores("../../example/IM0031_PV2T_25nt_raw_2mm_i1mm_Z-HDI75.tsv")
+    data1 = data.apply(lambda row: power + row, axis=0)
+    data1 = data1.apply(
+        lambda row: row.apply(lambda val: 1 if val < 1 else val),
+        axis=0
+    )
+    # might need to catch an exception for no columns
+    data2 = data1.drop(columns=[])
 
-    # data = data2.apply(
-    #     lambda row: row.apply(lambda val: log(val, base) - offset)
-    # )
+    outdata = data2.apply(
+        lambda row: row.apply(lambda val: log(val, base) - offset)
+    )
 
-    # maxDelta = max_delta_by_spline(timepoint1, timepoint2, data)
-    # maxZ = maxDelta[0]
-    # deltaZ = maxDelta[1]
-    # # TODO: add an option for the user to dictate the threshold
-    # #table = psea(maxZ, deltaZ, 0.75)
-    # table = psea(
-    #     maxZ, deltaZ, 1.00,
-    #     "../../example/input.tsv", "../../example/PV2species.csv"
-    # ) # for testing purposes
+    maxDelta = max_delta_by_spline(timepoints, outdata)
+    maxZ = maxDelta[0]
+    deltaZ = maxDelta[1]
+
+    table = psea(
+        data,
+        None,
+        None,
+        1.00,
+        gene_set,
+        ""
+    )
 
 
-def max_delta_by_spline(timepoint1, timepoint2, indata: pd.DataFrame) -> tuple:
+def max_delta_by_spline(timepoints, data) -> tuple:
     """
 
     Parameters
@@ -47,7 +49,7 @@ def max_delta_by_spline(timepoint1, timepoint2, indata: pd.DataFrame) -> tuple:
     timepoint2 : str
         values onto which a smooth cubic spline will be fit
 
-    indata : pd.DataFrame
+    data : pd.DataFrame
         matrix of Z scores for sequence
 
     Returns
@@ -57,19 +59,19 @@ def max_delta_by_spline(timepoint1, timepoint2, indata: pd.DataFrame) -> tuple:
         predicted Z scores, the spline values for timepoint1 (x) and
         timepoint2 (y)
     """
-    maxZ = np.apply_over_axes(np.max, indata.loc[:, [timepoint1, timepoint2]], 1)
+    maxZ = np.apply_over_axes(np.max, data.loc[:, [timepoint1, timepoint2]], 1)
 
     # perform smoothing spline prediction
-    y = indata.loc[:, timepoint2].to_numpy()
-    x = indata.loc[:, timepoint1].to_numpy()
+    y = data.loc[:, timepoint2].to_numpy()
+    x = data.loc[:, timepoint1].to_numpy()
     # tentative magic number 5 (knots) came from tutorial linked above
     smooth_spline = spline(5, y)
     deltaZ = y - smooth_spline(x)
 
     # convert maxZ and deltaZ to pandas Series - allows for association of
     # values with peptides
-    maxZ = pd.Series(data=[num for num in maxZ], index=indata.index)
-    deltaZ = pd.Series(data=deltaZ, index=indata.index)
+    maxZ = pd.Series(data=[num for num in maxZ], index=data.index)
+    deltaZ = pd.Series(data=deltaZ, index=data.index)
     
     return (maxZ, deltaZ, smooth_spline(x), smooth_spline(y))
 
@@ -122,7 +124,7 @@ def psea(
     )
 
 
-def read_table(file_path):
+def read_scores(file_path):
     data = []
     columns = []
     indexes = []
@@ -172,6 +174,3 @@ def spline(knots, y):
     # smoothing condition `s` from smooth.spline() in original R code
     t, c, k = interpolate.splrep(x, y, t=q_knots, s=0.788458)
     return interpolate.BSpline(t, c, k)
-
-
-make_psea_table()  # remove after plugin code has been full setup
