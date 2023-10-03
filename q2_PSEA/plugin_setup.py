@@ -4,12 +4,12 @@ import q2_PSEA
 
 from q2_PSEA.actions.psea import make_psea_table
 from qiime2.plugin import (
-    Plugin, Str, Visualization
+    Int, Plugin, Str, Visualization
 )
 
 # q2-PSEA plugin object
 plugin = Plugin(
-    "PSEA", version=q2_PSEA.__version__,
+    "psea", version=q2_PSEA.__version__,
     website="https://github.com/LadnerLab/q2-PSEA.git",
     description="Qiime2 Plugin for PSEA." # TODO: get a description
 )
@@ -22,15 +22,27 @@ plugin.pipelines.register_function(
     input_descriptions=None,
     parameters={
         "scores_file": Str,
-        "gene_set": Str,
-        "timepoints": Str
+        "timepoints_file": Str,
+        "pairs_file": Str,
+        "gene_sets_file": Str,
+        "cls": Str,
+        "min_size": Int,
+        "max_size": Int,
+        "threads": Int
     },
     parameter_descriptions={
         "scores_file": "Name of Z score matrix file.",
-        "gene_set": "Name of file containing information about viruses and"
-            " their peptides.",
-        "timepoints": "Name of tab-delimited file containing sequence names to"
-            " compare via smooth splining."
+        "timepoints_file": "Name of tab-delimited file containing information"
+            " referencing the time a sample was taken.",
+        "pairs_file": "Name of tab-delimited file containing pairs of"
+            " sample names.",
+        "gene_sets_file": "Name of GMT formatted file containing information"
+            " about viruses and their peptides.",
+        "cls": "Name of CLS formatted file containing phenotype labels for"
+            " sequences.",
+        "min_size": "",
+        "max_size": "",
+        "threads": "Number of threads with which to run GSEA operation."
     },
     outputs=[("zscore_scatter", Visualization)],
     output_descriptions={

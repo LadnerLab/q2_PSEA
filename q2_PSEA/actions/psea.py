@@ -6,36 +6,81 @@ from math import pow, log
 from scipy import interpolate
 
 
-def make_psea_table(ctx, scores_file, gene_set, timepoints):
+def make_psea_table(
+    ctx,
+    scores_file,
+    timepoints_file,
+    pairs_file,
+    gene_sets_file,
+    cls,
+    min_size,
+    max_size,
+    threads
+):
     base = 2
     offset = 3
     power = pow(base, offset)
 
-    data = read_scores("../../example/IM0031_PV2T_25nt_raw_2mm_i1mm_Z-HDI75.tsv")
-    data1 = data.apply(lambda row: power + row, axis=0)
+    # collect timepoints
+    # TODO: make sure timepoints file MUST be specified
+    with open(timepoints_file, "r") as fh:
+        # TODO: need to change to account for multiple lines
+        timepoints = fh.readlines()[0].strip().split()
+
+    # collect sample pairs
+    # TODO: make sure pairs file MUST be specified
+    with open(pairs_file, "r") as fh:
+        lines = fh.readlines()
+        print(f"Pair lines: {lines}")
+
+    scores = read_scores(scores_file)
+    data1 = scores.apply(lambda row: power + row, axis=0)
     data1 = data1.apply(
         lambda row: row.apply(lambda val: 1 if val < 1 else val),
         axis=0
     )
     # might need to catch an exception for no columns
-    data2 = data1.drop(columns=[])
+    data2 = data1.loc[:, timepoints]
 
     outdata = data2.apply(
         lambda row: row.apply(lambda val: log(val, base) - offset)
     )
+    outdata.to_csv("outdata.tsv", sep="\t")
 
     maxDelta = max_delta_by_spline(timepoints, outdata)
     maxZ = maxDelta[0]
     deltaZ = maxDelta[1]
+    # probably need to extract other returned information
+    print(f"MaxZ: {maxZ}\n")
+    print(f"DeltaZ: {deltaZ}")
 
     table = psea(
-        data,
-        None,
-        None,
-        1.00,
-        gene_set,
-        ""
+        scores=scores,
+        maxZ=maxZ,
+        deltaZ=deltaZ,
+        threshold=1.00,
+        gene_sets_file=gene_sets_file,
+        cls=cls,
+        min_size=min_size,
+        max_size=max_size,
+        threads=threads
     )
+    table.to_csv("gsea_table.tsv", sep="\t")
+
+    # # visualization
+    # repScatters_tsv = ctx.get_action("ps-plot", "repScatters_tsv")
+
+    # # for testing purposes
+    # return repScatters_tsv(
+    #     source=,
+    #     user_space_pairs=,  # might be timepoints?
+    #     pn_filepath=None,
+    #     plot_log=False,
+    #     zscore_filepath=scores_file,
+    #     col_sum_filepath=None,
+    #     facet_charts=False,
+    #     xy_threshold=None, # definitely need for highlighting outliers
+    # )
 
 
 def max_delta_by_spline(timepoints, data) -> tuple:
@@ -43,27 +88,26 @@ def max_delta_by_spline(timepoints, data) -> tuple:
 
     Parameters
     ----------
-    timepoint1 : str
-        x values for which y values will be predicted 
-
-    timepoint2 : str
-        values onto which a smooth cubic spline will be fit
+    timepoints : list
+        List of sequences for which to create cubic spline from
 
     data : pd.DataFrame
-        matrix of Z scores for sequence
+        Matrix of Z scores for sequence
 
     Returns
     -------
     tuple
         Contains maximum Z score, the difference (delta) in actual from
-        predicted Z scores, the spline values for timepoint1 (x) and
-        timepoint2 (y)
+        predicted Z scores, the spline values for x and y
     """
-    maxZ = np.apply_over_axes(np.max, data.loc[:, [timepoint1, timepoint2]], 1)
+    # TODO: see about just using `timepoints` since it is already a list
+    # - would make it easier for grabbing more than 2 columns of interest;
+    #   if that functionality is desired
+    maxZ = np.apply_over_axes(np.max, data.loc[:, timepoints, 1])
 
     # perform smoothing spline prediction
-    y = data.loc[:, timepoint2].to_numpy()
-    x = data.loc[:, timepoint1].to_numpy()
+    y = data.loc[:, timepoints[0]].to_numpy()
+    x = data.loc[:, timepoints[1]].to_numpy()
     # tentative magic number 5 (knots) came from tutorial linked above
     smooth_spline = spline(5, y)
     deltaZ = y - smooth_spline(x)
@@ -77,13 +121,16 @@ def max_delta_by_spline(timepoints, data) -> tuple:
 
 
 def psea(
-        data: pd.DataFrame, # TODO: figure out if this is actually needed for
-                            # process
-        maxZ: pd.Series,
-        deltaZ: pd.Series,
-        threshold: float,
-        input: str,
-        species: str
+    # TODO: figure out if this is actually needed for process
+    scores: pd.DataFrame,
+    maxZ: pd.Series,
+    deltaZ: pd.Series,
+    threshold: float,
+    gene_sets_file: str,
+    cls: str,
+    min_size: int = 15,
+    max_size: int = 500,
+    threads: int = 1
 ):
     """
 
@@ -95,29 +142,32 @@ def psea(
 
     threshold : float
 
-    input : pd.DataFrame
-
-    species : pd.DataFrame
+    gene_sets : str
 
     Returns
     -------
     """
     # TODO: figure out how to integrate into gsea function
-    # # grab indexes where condition is true
-    # maxZ_above_thresh = np.where(maxZ > threshold)
-    # deltaZ_not_zero = np.where(deltaZ != 0)
-    # # create gene list
-    # gene_list = deltaZ.iloc[np.intersect1d(maxZ_above_thresh, deltaZ_not_zero)].sort_values(ascending=False)
+    # grab indexes where condition is true
+    maxZ_above_thresh = np.where(maxZ > threshold)
+    deltaZ_not_zero = np.where(deltaZ != 0)
+    # create gene list
+    gene_list = deltaZ.iloc[
+        np.intersect1d(maxZ_above_thresh, deltaZ_not_zero)
+    ].sort_values(ascending=False)
+    gene_list.to_frame()
+    gene_list.to_csv("gene_list.tsv", sep="\t")
 
-    # read and rename columns
-    gene_set = pd.read_csv(input, sep="\t", header=None)
+    # print(f"MaxZ > {threshold}: {maxZ_above_thresh}")
+    # print(f"DeltaZ not 0: {deltaZ_not_zero}")
+    # print(f"Gene list:\n{gene_list}\n")
 
     # TODO: make sure to add other parameters
     return gp.gsea(
-        data=data,
-        gene_set=gene_set,
-        cls="../../example/Pro_PV2T.cls",
-        permutation_type="gene_set", # TODO: force gene set?
+        data=gene_list,
+        gene_sets=gene_sets_file,
+        cls=cls,
+        permutation_type="gene_set",  # TODO: force gene set?
         min_size=min_size,
         max_size=max_size,
         threads=threads
@@ -135,14 +185,14 @@ def read_scores(file_path):
 
         # grab column names from header
         columns = [name for name in lines[0].replace("\n", "").split("\t")]
-        columns.pop(0) # remove "Sequence name"
-        lines.pop(0) # remove header line
+        columns.pop(0)  # remove "Sequence name"
+        lines.pop(0)  # remove header line
 
         for line in lines:
             split_line = line.replace("\n", "").split("\t")
-            indexes.append(split_line[0]) # add peptide to index list
-            split_line.pop(0) # remove peptide name
-            data.append(split_line) # add data line
+            indexes.append(split_line[0])  # add peptide to index list
+            split_line.pop(0)  # remove peptide name
+            data.append(split_line)  # add data line
 
     return pd.DataFrame(
         data=data,
