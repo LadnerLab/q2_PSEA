@@ -17,37 +17,25 @@ def make_psea_table(
     max_size,
     threads
 ):
-    base = 2
-    offset = 3
-    power = pow(base, offset)
-
+    # TODO: tentative code for reading and formatting time points and pairs
+    #     1) ensure pairs file MUST be specified
+    #     2) ensure timepoints file MUST be specified
+    # collect sample pairs
+    with open(pairs_file, "r") as fh:
+        lines = [line.replace("\n", "") for line in fh.readlines()]
+        pairs = [tuple(lines[i:i+2]) for i in range(0, len(lines), 2)]
     # collect timepoints
     # TODO: make sure timepoints file MUST be specified
     with open(timepoints_file, "r") as fh:
-        # TODO: need to change to account for multiple lines
         timepoints = fh.readlines()[0].strip().split()
 
-    # collect sample pairs
-    # TODO: make sure pairs file MUST be specified
-    with open(pairs_file, "r") as fh:
-        lines = fh.readlines()
-        print(f"Pair lines: {lines}")
+    print(f"Pairs: {pairs}")
+    print(f"Timepoints: {timepoints}")
 
-    scores = read_scores(scores_file)
-    data1 = scores.apply(lambda row: power + row, axis=0)
-    data1 = data1.apply(
-        lambda row: row.apply(lambda val: 1 if val < 1 else val),
-        axis=0
-    )
-    # might need to catch an exception for no columns
-    data2 = data1.loc[:, timepoints]
+    processed_scores = load_scores(scores_file, pairs)
+    processed_scores.to_csv("processed_scores.tsv", sep="\t")
 
-    outdata = data2.apply(
-        lambda row: row.apply(lambda val: log(val, base) - offset)
-    )
-    outdata.to_csv("outdata.tsv", sep="\t")
-
-    maxDelta = max_delta_by_spline(timepoints, outdata)
+    maxDelta = max_delta_by_spline(pairs, processed_scores)
     maxZ = maxDelta[0]
     deltaZ = maxDelta[1]
     # probably need to extract other returned information
@@ -83,13 +71,13 @@ def make_psea_table(
     # )
 
 
-def max_delta_by_spline(timepoints, data) -> tuple:
+def max_delta_by_spline(pair, data) -> tuple:
     """
 
     Parameters
     ----------
-    timepoints : list
-        List of sequences for which to create cubic spline from
+    pair : Tuple
+        Tuple pair of samples for which to run max spline
 
     data : pd.DataFrame
         Matrix of Z scores for sequence
@@ -103,11 +91,11 @@ def max_delta_by_spline(timepoints, data) -> tuple:
     # TODO: see about just using `timepoints` since it is already a list
     # - would make it easier for grabbing more than 2 columns of interest;
     #   if that functionality is desired
-    maxZ = np.apply_over_axes(np.max, data.loc[:, timepoints, 1])
+    maxZ = np.apply_over_axes(np.max, data.loc[:, pair])
 
     # perform smoothing spline prediction
-    y = data.loc[:, timepoints[0]].to_numpy()
-    x = data.loc[:, timepoints[1]].to_numpy()
+    y = data.loc[:, pair[0]].to_numpy()
+    x = data.loc[:, pair[1]].to_numpy()
     # tentative magic number 5 (knots) came from tutorial linked above
     smooth_spline = spline(5, y)
     deltaZ = y - smooth_spline(x)
@@ -174,7 +162,15 @@ def psea(
     )
 
 
-def read_scores(file_path):
+def load_scores(file_path, pairs):
+    """Reads Z score matrix
+
+    Returns a Pandas DataFrame of processed Z scores
+    """
+    base = 2
+    offset = 3
+    power = pow(base, offset)
+
     data = []
     columns = []
     indexes = []
@@ -194,11 +190,31 @@ def read_scores(file_path):
             split_line.pop(0)  # remove peptide name
             data.append(split_line)  # add data line
 
-    return pd.DataFrame(
+    scores = pd.DataFrame(
         data=data,
         index=indexes,
         columns=columns,
         dtype=float
+    )
+
+    data1 = scores.apply(lambda row: power + row, axis=0)
+    data1 = data1.apply(
+        lambda row: row.apply(lambda val: 1 if val < 1 else val),
+        axis=0
+    )
+    # might need to catch an exception for no columns
+
+    # extrapolate list of column names from pairs list
+    pairs_list = []
+    for pair in pairs:
+        for sample in pair:
+            pairs_list.append(sample)
+    pairs_list = list(np.unique(pairs_list))
+    # grab columns from data1
+    data2 = data1.loc[:, pairs_list]
+
+    return data2.apply(
+        lambda row: row.apply(lambda val: log(val, base) - offset)
     )
 
 
