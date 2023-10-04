@@ -35,25 +35,27 @@ def make_psea_table(
     processed_scores = load_scores(scores_file, pairs)
     processed_scores.to_csv("processed_scores.tsv", sep="\t")
 
-    maxDelta = max_delta_by_spline(pairs, processed_scores)
-    maxZ = maxDelta[0]
-    deltaZ = maxDelta[1]
-    # probably need to extract other returned information
-    print(f"MaxZ: {maxZ}\n")
-    print(f"DeltaZ: {deltaZ}")
+    for pair in pairs:
+        maxDelta = max_delta_by_spline(processed_scores, pair)
+        maxZ = maxDelta[0]
+        deltaZ = maxDelta[1]
+        # probably need to extract other returned information
+        print(f"MaxZ: {maxZ}\n")
+        print(f"DeltaZ: {deltaZ}")
 
-    table = psea(
-        scores=scores,
-        maxZ=maxZ,
-        deltaZ=deltaZ,
-        threshold=1.00,
-        gene_sets_file=gene_sets_file,
-        cls=cls,
-        min_size=min_size,
-        max_size=max_size,
-        threads=threads
-    )
-    table.to_csv("gsea_table.tsv", sep="\t")
+    # TODO: make sure this happens for each pair
+    # table = psea(
+    #     scores=processed_scores,
+    #     maxZ=maxZ,
+    #     deltaZ=deltaZ,
+    #     threshold=1.00,
+    #     gene_sets_file=gene_sets_file,
+    #     cls=cls,
+    #     min_size=min_size,
+    #     max_size=max_size,
+    #     threads=threads
+    # )
+    # table.to_csv("gsea_table.tsv", sep="\t")
 
     # # visualization
     # repScatters_tsv = ctx.get_action("ps-plot", "repScatters_tsv")
@@ -71,16 +73,17 @@ def make_psea_table(
     # )
 
 
-def max_delta_by_spline(pair, data) -> tuple:
-    """
+def max_delta_by_spline(data, pair) -> tuple:
+    """Finds the maximum value between two samples, and calculates the
+    difference in Z score for each peptide
 
     Parameters
     ----------
-    pair : Tuple
-        Tuple pair of samples for which to run max spline
-
     data : pd.DataFrame
         Matrix of Z scores for sequence
+
+    pair : Tuple
+        Tuple pair of samples for which to run max spline
 
     Returns
     -------
@@ -88,10 +91,7 @@ def max_delta_by_spline(pair, data) -> tuple:
         Contains maximum Z score, the difference (delta) in actual from
         predicted Z scores, the spline values for x and y
     """
-    # TODO: see about just using `timepoints` since it is already a list
-    # - would make it easier for grabbing more than 2 columns of interest;
-    #   if that functionality is desired
-    maxZ = np.apply_over_axes(np.max, data.loc[:, pair])
+    maxZ = np.apply_over_axes(np.max, data.loc[:, pair], 1)
 
     # perform smoothing spline prediction
     y = data.loc[:, pair[0]].to_numpy()
