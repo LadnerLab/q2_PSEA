@@ -4,7 +4,7 @@ import q2_PSEA
 
 from q2_PSEA.actions.psea import make_psea_table
 from qiime2.plugin import (
-    Int, Plugin, Str, Visualization
+    Float, Int, Plugin, Str, Visualization
 )
 
 # q2-PSEA plugin object
@@ -26,6 +26,7 @@ plugin.pipelines.register_function(
         "pairs_file": Str,
         "gene_sets_file": Str,
         "cls": Str,
+        "threshold": Float,
         "min_size": Int,
         "max_size": Int,
         "threads": Int
@@ -40,6 +41,7 @@ plugin.pipelines.register_function(
             " about viruses and their peptides.",
         "cls": "Name of CLS formatted file containing phenotype labels for"
             " sequences.",
+        "threshold" : "",
         "min_size": "",
         "max_size": "",
         "threads": "Number of threads with which to run GSEA operation."

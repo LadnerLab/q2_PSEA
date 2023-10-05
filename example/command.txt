@@ -3,6 +3,7 @@ qiime psea make-psea-table --p-scores-file ../../example/IM0031_PV2T_25nt_raw_2m
 --p-pairs-file ../../example/pairs.tsv \
 --p-gene-sets-file ../../example/input.gmt \
 --p-cls ../../example/Pro_PV2T.cls \
+--p-threshold 0.750000 \
 --p-min-size 1 \
 --p-max-size 1000 \
 --p-threads 4 \

@@ -13,6 +13,7 @@ def make_psea_table(
     pairs_file,
     gene_sets_file,
     cls,
+    threshold,
     min_size,
     max_size,
     threads
@@ -29,48 +30,31 @@ def make_psea_table(
     with open(timepoints_file, "r") as fh:
         timepoints = fh.readlines()[0].strip().split()
 
-    print(f"Pairs: {pairs}")
-    print(f"Timepoints: {timepoints}")
-
     processed_scores = load_scores(scores_file, pairs)
-    processed_scores.to_csv("processed_scores.tsv", sep="\t")
+    # processed_scores.to_csv("processed_scores.tsv", sep="\t")
 
     for pair in pairs:
-        maxDelta = max_delta_by_spline(processed_scores, pair)
-        maxZ = maxDelta[0]
-        deltaZ = maxDelta[1]
+        spline_tup = max_delta_by_spline(processed_scores, pair)
+        maxZ = spline_tup[0]
+        deltaZ = spline_tup[1]
+        spline_x = spline_tup[2]
+        spline_y = spline_tup[3]
         # probably need to extract other returned information
-        print(f"MaxZ: {maxZ}\n")
-        print(f"DeltaZ: {deltaZ}")
+        # maxZ.to_csv("maxZ.tsv", sep="\t")
+        # deltaZ.to_csv("deltaZ.tsv", sep="\t")
 
-    # TODO: make sure this happens for each pair
-    # table = psea(
-    #     scores=processed_scores,
-    #     maxZ=maxZ,
-    #     deltaZ=deltaZ,
-    #     threshold=1.00,
-    #     gene_sets_file=gene_sets_file,
-    #     cls=cls,
-    #     min_size=min_size,
-    #     max_size=max_size,
-    #     threads=threads
-    # )
-    # table.to_csv("gsea_table.tsv", sep="\t")
-
-    # # visualization
-    # repScatters_tsv = ctx.get_action("ps-plot", "repScatters_tsv")
-
-    # # for testing purposes
-    # return repScatters_tsv(
-    #     source=,
-    #     user_space_pairs=,  # might be timepoints?
-    #     pn_filepath=None,
-    #     plot_log=False,
-    #     zscore_filepath=scores_file,
-    #     col_sum_filepath=None,
-    #     facet_charts=False,
-    #     xy_threshold=None, # definitely need for highlighting outliers
-    # )
+        table = psea(
+            scores=processed_scores,
+            maxZ=maxZ,
+            deltaZ=deltaZ,
+            gene_sets_file=gene_sets_file,
+            cls=cls,
+            threshold=threshold,
+            min_size=min_size,
+            max_size=max_size,
+            threads=threads
+        )
+        table.to_csv("gsea_table.tsv", sep="\t")
 
 
 def max_delta_by_spline(data, pair) -> tuple:
@@ -110,12 +94,12 @@ def max_delta_by_spline(data, pair) -> tuple:
 
 def psea(
     # TODO: figure out if this is actually needed for process
-    scores: pd.DataFrame,
+    scores: pd.DataFrame, 
     maxZ: pd.Series,
     deltaZ: pd.Series,
-    threshold: float,
     gene_sets_file: str,
     cls: str,
+    threshold: float,
     min_size: int = 15,
     max_size: int = 500,
     threads: int = 1
@@ -143,18 +127,14 @@ def psea(
     gene_list = deltaZ.iloc[
         np.intersect1d(maxZ_above_thresh, deltaZ_not_zero)
     ].sort_values(ascending=False)
-    gene_list.to_frame()
     gene_list.to_csv("gene_list.tsv", sep="\t")
-
-    # print(f"MaxZ > {threshold}: {maxZ_above_thresh}")
-    # print(f"DeltaZ not 0: {deltaZ_not_zero}")
-    # print(f"Gene list:\n{gene_list}\n")
+    print(f"Gene list: {gene_list}")
 
     # TODO: make sure to add other parameters
     return gp.gsea(
-        data=gene_list,
+        data=scores,
         gene_sets=gene_sets_file,
-        cls=cls,
+        cls=["first", "first", "first", "second", "second", "second"],  # TODO: maybe just a list
         permutation_type="gene_set",  # TODO: force gene set?
         min_size=min_size,
         max_size=max_size,
