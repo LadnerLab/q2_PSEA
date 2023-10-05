@@ -93,12 +93,11 @@ def max_delta_by_spline(data, pair) -> tuple:
 
 
 def psea(
-    # TODO: figure out if this is actually needed for process
-    scores: pd.DataFrame, 
     maxZ: pd.Series,
     deltaZ: pd.Series,
     gene_sets_file: str,
     cls: str,
+    outdir: str = None,
     threshold: float,
     min_size: int = 15,
     max_size: int = 500,
@@ -128,16 +127,20 @@ def psea(
         np.intersect1d(maxZ_above_thresh, deltaZ_not_zero)
     ].sort_values(ascending=False)
     gene_list.to_csv("gene_list.tsv", sep="\t")
-    print(f"Gene list: {gene_list}")
 
-    # TODO: make sure to add other parameters
-    return gp.gsea(
-        data=scores,
+    # TODO:
+    # 1) ask if `permutation_num` needs to be set for some reason
+    # 2) ask if `seed` needs to be set, and to what?
+    # 3) ask if `scale` should be True
+    # 4) see about if plotting feature is useful and generates the plots we want (`no_plot`)
+    return gp.ssgsea(
+        data=gene_list,
         gene_sets=gene_sets_file,
-        cls=["first", "first", "first", "second", "second", "second"],  # TODO: maybe just a list
-        permutation_type="gene_set",  # TODO: force gene set?
+        outdir=outdir,
         min_size=min_size,
         max_size=max_size,
+        weight=threshold,
+        seed=10,
         threads=threads
     )
 
