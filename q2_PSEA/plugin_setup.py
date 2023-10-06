@@ -25,7 +25,6 @@ plugin.pipelines.register_function(
         "timepoints_file": Str,
         "pairs_file": Str,
         "gene_sets_file": Str,
-        "cls": Str,
         "threshold": Float,
         "min_size": Int,
         "max_size": Int,
@@ -39,8 +38,6 @@ plugin.pipelines.register_function(
             " sample names.",
         "gene_sets_file": "Name of GMT formatted file containing information"
             " about viruses and their peptides.",
-        "cls": "Name of CLS formatted file containing phenotype labels for"
-            " sequences.",
         "threshold" : "",
         "min_size": "",
         "max_size": "",

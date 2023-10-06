@@ -12,7 +12,6 @@ def make_psea_table(
     timepoints_file,
     pairs_file,
     gene_sets_file,
-    cls,
     threshold,
     min_size,
     max_size,
@@ -26,12 +25,10 @@ def make_psea_table(
         lines = [line.replace("\n", "") for line in fh.readlines()]
         pairs = [tuple(lines[i:i+2]) for i in range(0, len(lines), 2)]
     # collect timepoints
-    # TODO: make sure timepoints file MUST be specified
     with open(timepoints_file, "r") as fh:
         timepoints = fh.readlines()[0].strip().split()
 
     processed_scores = load_scores(scores_file, pairs)
-    # processed_scores.to_csv("processed_scores.tsv", sep="\t")
 
     for pair in pairs:
         spline_tup = max_delta_by_spline(processed_scores, pair)
@@ -39,22 +36,17 @@ def make_psea_table(
         deltaZ = spline_tup[1]
         spline_x = spline_tup[2]
         spline_y = spline_tup[3]
-        # probably need to extract other returned information
-        # maxZ.to_csv("maxZ.tsv", sep="\t")
-        # deltaZ.to_csv("deltaZ.tsv", sep="\t")
 
-        table = psea(
-            scores=processed_scores,
+        psea_res = psea(
             maxZ=maxZ,
             deltaZ=deltaZ,
             gene_sets_file=gene_sets_file,
-            cls=cls,
             threshold=threshold,
             min_size=min_size,
             max_size=max_size,
             threads=threads
         )
-        table.to_csv("gsea_table.tsv", sep="\t")
+        psea_res.res2d.to_csv("psea_res.tsv", sep="\t")
 
 
 def max_delta_by_spline(data, pair) -> tuple:
@@ -96,14 +88,14 @@ def psea(
     maxZ: pd.Series,
     deltaZ: pd.Series,
     gene_sets_file: str,
-    cls: str,
-    outdir: str = None,
     threshold: float,
     min_size: int = 15,
     max_size: int = 500,
-    threads: int = 1
+    threads: int = 1,
+    outdir: str = None
 ):
-    """
+    """Finds the intersection between peptides in `maxZ` with a value greater
+    than `threshold` and those in `deltaZ` which have a value not equal to 0
 
     Parameters
     ----------
@@ -111,17 +103,27 @@ def psea(
 
     deltaZ : pd.Series
 
+    gene_sets_file : str
+
     threshold : float
 
-    gene_sets : str
+    min_size : int
+
+    max_size : int
+
+    threads : int
 
     Returns
     -------
+    SingleSampleGSEA
+        Containes the resulting table with information associating a sample
+        name (Name) to a Term, and the normalized and raw enrichment scores
+        for each Term
     """
-    # TODO: figure out how to integrate into gsea function
     # grab indexes where condition is true
     maxZ_above_thresh = np.where(maxZ > threshold)
     deltaZ_not_zero = np.where(deltaZ != 0)
+
     # create gene list
     gene_list = deltaZ.iloc[
         np.intersect1d(maxZ_above_thresh, deltaZ_not_zero)
@@ -132,6 +134,7 @@ def psea(
     # 1) ask if `permutation_num` needs to be set for some reason
     # 2) ask if `seed` needs to be set, and to what?
     # 3) ask if `scale` should be True
+    # 4) ask if we want to pass output director to ssgsea
     # 4) see about if plotting feature is useful and generates the plots we want (`no_plot`)
     return gp.ssgsea(
         data=gene_list,
@@ -185,7 +188,6 @@ def load_scores(file_path, pairs):
         lambda row: row.apply(lambda val: 1 if val < 1 else val),
         axis=0
     )
-    # might need to catch an exception for no columns
 
     # extrapolate list of column names from pairs list
     pairs_list = []
