@@ -7,16 +7,18 @@ from scipy import interpolate
 
 
 def make_psea_table(
-    ctx,
-    scores_file,
-    timepoints_file,
-    pairs_file,
-    gene_sets_file,
-    threshold,
-    min_size,
-    max_size,
-    threads
+        ctx,
+        scores_file,
+        timepoints_file,
+        pairs_file,
+        gene_sets_file,
+        threshold,
+        min_size,
+        max_size,
+        threads
 ):
+    repScatter_tsv = ctx.get_action("ps-plot", "repScatters_tsv")
+    
     # TODO: tentative code for reading and formatting time points and pairs
     #     1) ensure pairs file MUST be specified
     #     2) ensure timepoints file MUST be specified
@@ -29,15 +31,18 @@ def make_psea_table(
         timepoints = fh.readlines()[0].strip().split()
 
     processed_scores = load_scores(scores_file, pairs)
+    processed_scores.to_csv("processed_scores.tsv", sep="\t")
 
+    table_num = 1
     for pair in pairs:
+        # run PSEA operation for current pair
         spline_tup = max_delta_by_spline(processed_scores, pair)
         maxZ = spline_tup[0]
         deltaZ = spline_tup[1]
         spline_x = spline_tup[2]
         spline_y = spline_tup[3]
 
-        psea_res = psea(
+        table = psea(
             maxZ=maxZ,
             deltaZ=deltaZ,
             gene_sets_file=gene_sets_file,
@@ -46,7 +51,17 @@ def make_psea_table(
             max_size=max_size,
             threads=threads
         )
-        psea_res.res2d.to_csv("psea_res.tsv", sep="\t")
+        table.res2d.to_csv(f"table_pair_{table_num}.tsv", sep="\t")
+        table_num += 1
+
+    # generate scatter plot for PSEA results
+    zscore_scatter, = repScatter_tsv(
+        user_spec_pairs=[rep for pair in pairs for rep in pair],
+        zscore_filepath="./processed_scores.tsv"
+    )
+
+    # TODO: remove temp "processed_scores.tsv" file
+    return zscore_scatter
 
 
 def max_delta_by_spline(data, pair) -> tuple:
@@ -148,7 +163,7 @@ def psea(
     )
 
 
-def load_scores(file_path, pairs):
+def load_scores(file_path, pairs) -> pd.DataFrame:
     """Reads Z score matrix
 
     Returns a Pandas DataFrame of processed Z scores
@@ -157,31 +172,8 @@ def load_scores(file_path, pairs):
     offset = 3
     power = pow(base, offset)
 
-    data = []
-    columns = []
-    indexes = []
-    with open("../../example/IM0031_PV2T_25nt_raw_2mm_i1mm_Z-HDI75.tsv", "r") \
-            as data_fh:
-        # read matrix into memory
-        lines = data_fh.readlines()
-
-        # grab column names from header
-        columns = [name for name in lines[0].replace("\n", "").split("\t")]
-        columns.pop(0)  # remove "Sequence name"
-        lines.pop(0)  # remove header line
-
-        for line in lines:
-            split_line = line.replace("\n", "").split("\t")
-            indexes.append(split_line[0])  # add peptide to index list
-            split_line.pop(0)  # remove peptide name
-            data.append(split_line)  # add data line
-
-    scores = pd.DataFrame(
-        data=data,
-        index=indexes,
-        columns=columns,
-        dtype=float
-    )
+    # read Z scores into memory
+    scores = pd.read_csv(file_path, sep="\t", index_col=0)
 
     data1 = scores.apply(lambda row: power + row, axis=0)
     data1 = data1.apply(
