@@ -28,7 +28,8 @@ plugin.pipelines.register_function(
         "threshold": Float,
         "min_size": Int,
         "max_size": Int,
-        "threads": Int
+        "threads": Int,
+        "pepsirf_binary": Str
     },
     parameter_descriptions={
         "scores_file": "Name of Z score matrix file.",
@@ -41,11 +42,12 @@ plugin.pipelines.register_function(
         "threshold" : "",
         "min_size": "",
         "max_size": "",
-        "threads": "Number of threads with which to run GSEA operation."
+        "threads": "Number of threads with which to run GSEA operation.",
+        "pepsirf_binary": "Path to pepsirf binary."
     },
-    outputs=[("zscore_scatter", Visualization)],
+    outputs=[("zenrich_plot", Visualization)],
     output_descriptions={
-        "zscore_scatter": "Name of plot file visualization comparison between"
+        "zenrich_plot": "Name of plot file visualization comparison between"
             " two samples. This plot includes the smooth spline fit to the given"
             " data and highlights the leading edge peptides for all"
             " significant taxa."

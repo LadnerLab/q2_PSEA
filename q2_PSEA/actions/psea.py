@@ -1,9 +1,30 @@
 import gseapy as gp
 import numpy as np
 import pandas as pd
+import qiime2
 
 from math import pow, log
 from scipy import interpolate
+from q2_pepsirf.format_types import(
+    PepsirfContingencyTSVFormat, PepsirfInfoSNPNFormat
+)
+
+
+def generate_metadata(replicates):
+    base_reps = []
+
+    replicates.sort()
+
+    for replicate in replicates:
+        base_seq_name = replicate.split("_")[2]
+        base_reps.append(base_seq_name)
+
+    meta_series = pd.Series(data=base_reps, index=replicates)
+    meta_series.index.name = "sample-id"
+    meta_series.name = "source"
+    print(f"\n\nMeta-series:\n{meta_series}\n\n")
+
+    return qiime2.metadata.CategoricalMetadataColumn(meta_series)
 
 
 def make_psea_table(
@@ -15,13 +36,16 @@ def make_psea_table(
         threshold,
         min_size,
         max_size,
-        threads
+        threads=4,
+        pepsirf_binary="pepsirf"
 ):
-    repScatter_tsv = ctx.get_action("ps-plot", "repScatters_tsv")
+    norm = ctx.get_action("pepsirf", "norm")
+    zenrich = ctx.get_action("ps-plot", "zenrich")
     
     # TODO: tentative code for reading and formatting time points and pairs
     #     1) ensure pairs file MUST be specified
     #     2) ensure timepoints file MUST be specified
+    #     3) read scores matrix here
     # collect sample pairs
     with open(pairs_file, "r") as fh:
         lines = [line.replace("\n", "") for line in fh.readlines()]
@@ -31,6 +55,7 @@ def make_psea_table(
         timepoints = fh.readlines()[0].strip().split()
 
     processed_scores = load_scores(scores_file, pairs)
+    # save to disk for zenrich plot creation
     processed_scores.to_csv("processed_scores.tsv", sep="\t")
 
     table_num = 1
@@ -49,19 +74,48 @@ def make_psea_table(
             threshold=threshold,
             min_size=min_size,
             max_size=max_size,
-            threads=threads
+            threads=threads,
+            outdir="table_outdir"
         )
-        table.res2d.to_csv(f"table_pair_{table_num}.tsv", sep="\t")
+        # table.res2d.to_csv("res2d.tsv", sep="\t", index=False)
+        # table.res2d["NES"].to_csv("nes.tsv", sep="\t", index=False)
+        table.res2d["Lead_genes"].to_csv("lead_genes.tsv", sep="\t", index=False)
+        # table.res2d.to_csv("table_perm_num_1.tsv", sep="\t", index=False)
         table_num += 1
 
-    # generate scatter plot for PSEA results
-    zscore_scatter, = repScatter_tsv(
-        user_spec_pairs=[rep for pair in pairs for rep in pair],
-        zscore_filepath="./processed_scores.tsv"
+    # import score data as artifacts
+    scores_artifact = ctx.make_artifact(
+        type="FeatureTable[Zscore]",
+        view=scores_file,
+        view_type=PepsirfContingencyTSVFormat
+    )
+    processed_artifact = ctx.make_artifact(
+        type="FeatureTable[RawCounts]",
+        view="processed_scores.tsv",
+        view_type=PepsirfContingencyTSVFormat
+    )
+    highlight_probes = ctx.make_artifact(  # TODO: ensure formatting does not cause some unforeseen problem
+        type="InfoSNPN",
+        view="lead_genes.tsv",
+        view_type=PepsirfInfoSNPNFormat
+    )
+
+    # generate zenrich plot
+    col_sum, = norm(
+        peptide_scores=processed_artifact,
+        normalize_approach="col_sum",  # TODO: check if user should decide
+        pepsirf_binary=pepsirf_binary
+    )
+    col_sum.view(PepsirfContingencyTSVFormat).save("norm_processed_scores.tsv")
+    zenrich_plot = zenrich(
+        data=col_sum,
+        zscores=scores_artifact,
+        source=generate_metadata([rep for pair in pairs for rep in pair]),
+        highlight_probes=highlight_probes
     )
 
     # TODO: remove temp "processed_scores.tsv" file
-    return zscore_scatter
+    return zenrich_plot
 
 
 def max_delta_by_spline(data, pair) -> tuple:
@@ -139,17 +193,36 @@ def psea(
     maxZ_above_thresh = np.where(maxZ > threshold)
     deltaZ_not_zero = np.where(deltaZ != 0)
 
-    # create gene list
+    # create gene list will
     gene_list = deltaZ.iloc[
         np.intersect1d(maxZ_above_thresh, deltaZ_not_zero)
     ].sort_values(ascending=False)
-    gene_list.to_csv("gene_list.tsv", sep="\t")
 
     # TODO:
-    # 1) ask if `permutation_num` needs to be set for some reason
-    # 2) ask if `seed` needs to be set, and to what?
-    # 3) ask if `scale` should be True
-    # 4) ask if we want to pass output director to ssgsea
+    # 1) ask about `seed`
+    # 2) ask about `permutation_num`
+    # 3) ask about `no_plot`
+    # 4) ask about `weighted_score_type`
+    # 5) ask about `outdir`
+    # prerank = gp.prerank(
+    #     rnk=gene_list,
+    #     gene_sets=gene_sets_file,
+    #     outdir=outdir,
+    #     permutation_num=1,  # TODO: if this works, see about an option
+    #     min_size=min_size,
+    #     max_size=max_size,
+    #     weight=threshold,
+    #     threads=threads
+    # )
+
+    # # write out some files for testing
+    # prerank.res2d.to_csv("prerank_table.tsv", sep="\t", index=False)
+    # prerank.res2d["Lead_genes"].to_csv("lead_genes.tsv", sep="\t", index=False)
+
+    # TODO:
+    # 1) ask if `seed` needs to be set, and to what?
+    # 2) ask if `scale` should be True
+    # 3) ask if we want to pass output director to ssgsea
     # 4) see about if plotting feature is useful and generates the plots we want (`no_plot`)
     return gp.ssgsea(
         data=gene_list,
@@ -157,8 +230,8 @@ def psea(
         outdir=outdir,
         min_size=min_size,
         max_size=max_size,
+        permutation_num=1,  # TODO: keep in mind this is here
         weight=threshold,
-        seed=10,
         threads=threads
     )
 
