@@ -5,7 +5,7 @@ import qiime2
 
 from math import pow, log
 from scipy import interpolate
-from q2_pepsirf.format_types import(
+from q2_pepsirf.format_types import (
     PepsirfContingencyTSVFormat, PepsirfInfoSNPNFormat
 )
 
@@ -41,7 +41,9 @@ def make_psea_table(
 ):
     norm = ctx.get_action("pepsirf", "norm")
     zenrich = ctx.get_action("ps-plot", "zenrich")
-    
+
+    # collect zscores
+    scores = pd.read_csv(scores_file, sep="\t", index_col=0)
     # TODO: tentative code for reading and formatting time points and pairs
     #     1) ensure pairs file MUST be specified
     #     2) ensure timepoints file MUST be specified
@@ -54,7 +56,7 @@ def make_psea_table(
     with open(timepoints_file, "r") as fh:
         timepoints = fh.readlines()[0].strip().split()
 
-    processed_scores = load_scores(scores_file, pairs)
+    processed_scores = process_scores(scores, pairs)
     # save to disk for zenrich plot creation
     processed_scores.to_csv("processed_scores.tsv", sep="\t")
 
@@ -64,8 +66,8 @@ def make_psea_table(
         spline_tup = max_delta_by_spline(processed_scores, pair)
         maxZ = spline_tup[0]
         deltaZ = spline_tup[1]
-        spline_x = spline_tup[2]
-        spline_y = spline_tup[3]
+        # spline_x = spline_tup[2]
+        # spline_y = spline_tup[3]
 
         table = psea(
             maxZ=maxZ,
@@ -75,47 +77,48 @@ def make_psea_table(
             min_size=min_size,
             max_size=max_size,
             threads=threads,
+            permutation_num=10000,
             outdir="table_outdir"
         )
-        # table.res2d.to_csv("res2d.tsv", sep="\t", index=False)
-        # table.res2d["NES"].to_csv("nes.tsv", sep="\t", index=False)
-        table.res2d["Lead_genes"].to_csv("lead_genes.tsv", sep="\t", index=False)
-        # table.res2d.to_csv("table_perm_num_1.tsv", sep="\t", index=False)
+        print(f"PSEA result table: {table.res2d}")
         table_num += 1
 
     # import score data as artifacts
-    scores_artifact = ctx.make_artifact(
-        type="FeatureTable[Zscore]",
-        view=scores_file,
-        view_type=PepsirfContingencyTSVFormat
-    )
-    processed_artifact = ctx.make_artifact(
-        type="FeatureTable[RawCounts]",
-        view="processed_scores.tsv",
-        view_type=PepsirfContingencyTSVFormat
-    )
-    highlight_probes = ctx.make_artifact(  # TODO: ensure formatting does not cause some unforeseen problem
-        type="InfoSNPN",
-        view="lead_genes.tsv",
-        view_type=PepsirfInfoSNPNFormat
-    )
+    # scores_artifact = ctx.make_artifact(
+    #     type="FeatureTable[Zscore]",
+    #     view=scores_file,
+    #     view_type=PepsirfContingencyTSVFormat
+    # )
+    # processed_artifact = ctx.make_artifact(
+    #     type="FeatureTable[RawCounts]",
+    #     view="processed_scores.tsv",
+    #     view_type=PepsirfContingencyTSVFormat
+    # )
+    # TODO: ensure formatting does not cause some unforeseen problem
+    # highlight_probes = ctx.make_artifact(
+    #     type="InfoSNPN",
+    #     view="lead_genes.tsv",
+    #     view_type=PepsirfInfoSNPNFormat
+    # )
 
     # generate zenrich plot
-    col_sum, = norm(
-        peptide_scores=processed_artifact,
-        normalize_approach="col_sum",  # TODO: check if user should decide
-        pepsirf_binary=pepsirf_binary
-    )
-    col_sum.view(PepsirfContingencyTSVFormat).save("norm_processed_scores.tsv")
-    zenrich_plot = zenrich(
-        data=col_sum,
-        zscores=scores_artifact,
-        source=generate_metadata([rep for pair in pairs for rep in pair]),
-        highlight_probes=highlight_probes
-    )
+    # col_sum, = norm(
+    #     peptide_scores=processed_artifact,
+    #     normalize_approach="col_sum",  # TODO: check if user should decide
+    #     pepsirf_binary=pepsirf_binary
+    # )
+    # col_sum.view(PepsirfContingencyTSVFormat).save("norm_processed_scores.tsv")
+    # zenrich_plot = zenrich(
+    #     data=col_sum,
+    #     zscores=scores_artifact,
+    #     source=generate_metadata([rep for pair in pairs for rep in pair]),
+    #     highlight_probes=highlight_probes,
+    #     negative_controls=None
+    # )
 
     # TODO: remove temp "processed_scores.tsv" file
-    return zenrich_plot
+    # return zenrich_plot
+    return qiime2.sdk.Visualization
 
 
 def max_delta_by_spline(data, pair) -> tuple:
@@ -149,7 +152,7 @@ def max_delta_by_spline(data, pair) -> tuple:
     # values with peptides
     maxZ = pd.Series(data=[num for num in maxZ], index=data.index)
     deltaZ = pd.Series(data=deltaZ, index=data.index)
-    
+
     return (maxZ, deltaZ, smooth_spline(x), smooth_spline(y))
 
 
@@ -158,6 +161,7 @@ def psea(
     deltaZ: pd.Series,
     gene_sets_file: str,
     threshold: float,
+    permutation_num: int = 0,
     min_size: int = 15,
     max_size: int = 500,
     threads: int = 1,
@@ -199,44 +203,24 @@ def psea(
     ].sort_values(ascending=False)
 
     # TODO:
-    # 1) ask about `seed`
-    # 2) ask about `permutation_num`
-    # 3) ask about `no_plot`
-    # 4) ask about `weighted_score_type`
-    # 5) ask about `outdir`
-    # prerank = gp.prerank(
-    #     rnk=gene_list,
-    #     gene_sets=gene_sets_file,
-    #     outdir=outdir,
-    #     permutation_num=1,  # TODO: if this works, see about an option
-    #     min_size=min_size,
-    #     max_size=max_size,
-    #     weight=threshold,
-    #     threads=threads
-    # )
-
-    # # write out some files for testing
-    # prerank.res2d.to_csv("prerank_table.tsv", sep="\t", index=False)
-    # prerank.res2d["Lead_genes"].to_csv("lead_genes.tsv", sep="\t", index=False)
-
-    # TODO:
     # 1) ask if `seed` needs to be set, and to what?
     # 2) ask if `scale` should be True
     # 3) ask if we want to pass output director to ssgsea
-    # 4) see about if plotting feature is useful and generates the plots we want (`no_plot`)
+    # 4) see about if plotting feature is useful and generates the plots we
+    # want (`no_plot`)
     return gp.ssgsea(
         data=gene_list,
         gene_sets=gene_sets_file,
         outdir=outdir,
         min_size=min_size,
         max_size=max_size,
-        permutation_num=1,  # TODO: keep in mind this is here
+        permutation_num=permutation_num,  # TODO: keep in mind this is here
         weight=threshold,
         threads=threads
     )
 
 
-def load_scores(file_path, pairs) -> pd.DataFrame:
+def process_scores(scores, pairs) -> pd.DataFrame:
     """Reads Z score matrix
 
     Returns a Pandas DataFrame of processed Z scores
@@ -244,9 +228,6 @@ def load_scores(file_path, pairs) -> pd.DataFrame:
     base = 2
     offset = 3
     power = pow(base, offset)
-
-    # read Z scores into memory
-    scores = pd.read_csv(file_path, sep="\t", index_col=0)
 
     data1 = scores.apply(lambda row: power + row, axis=0)
     data1 = data1.apply(
