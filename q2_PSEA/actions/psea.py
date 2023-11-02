@@ -42,6 +42,10 @@ def make_psea_table(
     norm = ctx.get_action("pepsirf", "norm")
     zenrich = ctx.get_action("ps-plot", "zenrich")
 
+    pd.set_option("display.max_rows", 1000)
+    pd.set_option("display.max_columns", 1000)
+    pd.set_option("display.precision", 9)
+
     # collect zscores
     scores = pd.read_csv(scores_file, sep="\t", index_col=0)
     # TODO: tentative code for reading and formatting time points and pairs
@@ -80,7 +84,7 @@ def make_psea_table(
             permutation_num=10000,
             outdir="table_outdir"
         )
-        print(f"PSEA result table: {table.res2d}")
+        print(f"PSEA result table:\n{table.res2d}")
         table_num += 1
 
     # import score data as artifacts
