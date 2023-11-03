@@ -52,13 +52,12 @@ def make_psea_table(
     # collect pairs
     with open(pairs_file, "r") as fh:
         pairs = [
-            tuple(line.replace("\n", "").split())
+            tuple(line.replace("\n", "").split("\t"))
             for line in fh.readlines()
         ]
     # collect timepoints
     with open(timepoints_file, "r") as fh:
         timepoints = fh.readlines()[0].strip().split()
-    print(f"Pairs: {pairs}\n")
 
     # process scores
     processed_scores = process_scores(scores, pairs)
@@ -254,10 +253,8 @@ def process_scores(scores, pairs) -> pd.DataFrame:
     reps_list = []
     for pair in pairs:
         for rep in pair:
-            print(f"Rep ({rep}) from pair ({pair})")
             reps_list.append(rep)
     reps_list = list(np.unique(reps_list))
-    print(f"Replicates list: {reps_list}\n\n")
     # exclude unused replicates
     data2 = data1.loc[:, reps_list]
 
