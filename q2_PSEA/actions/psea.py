@@ -57,31 +57,31 @@ def make_psea_table(
     # process scores
     processed_scores = process_scores(scores, pairs)
     # save to disk for zenrich plot creation
-    processed_scores.to_csv("py_processed_scores.tsv", sep="\t", index=True)
+    processed_scores.to_csv("processed_scores.tsv", sep="\t", index=True)
 
-    # # run psea for pairs
-    # table_num = 1
-    # for pair in pairs:
-    #     # run PSEA operation for current pair
-    #     spline_tup = max_delta_by_spline(processed_scores, pair)
-    #     maxZ = spline_tup[0]
-    #     deltaZ = spline_tup[1]
-    #     # spline_x = spline_tup[2]
-    #     # spline_y = spline_tup[3]
+    # run psea for pairs
+    table_num = 1
+    for pair in pairs:
+        # run PSEA operation for current pair
+        spline_tup = max_delta_by_spline(processed_scores, pair)
+        maxZ = spline_tup[0]
+        deltaZ = spline_tup[1]
+        # spline_x = spline_tup[2]
+        # spline_y = spline_tup[3]
 
-    #     table = psea(
-    #         maxZ=maxZ,
-    #         deltaZ=deltaZ,
-    #         gene_sets_file=gene_sets_file,
-    #         threshold=threshold,
-    #         min_size=min_size,
-    #         max_size=max_size,
-    #         threads=threads,
-    #         permutation_num=10000,
-    #         outdir="table_outdir"
-    #     )
-    #     print(f"PSEA result table:\n{table.res2d}")
-    #     table_num += 1
+        table = psea(
+            maxZ=maxZ,
+            deltaZ=deltaZ,
+            gene_sets_file=gene_sets_file,
+            threshold=threshold,
+            min_size=min_size,
+            max_size=max_size,
+            threads=threads,
+            permutation_num=10000,
+            outdir="table_outdir"
+        )
+        print(f"PSEA result table:\n{table.res2d}")
+        table_num += 1
 
     # import score data as artifacts
     # scores_artifact = ctx.make_artifact(
