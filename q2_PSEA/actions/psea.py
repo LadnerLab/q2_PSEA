@@ -42,11 +42,6 @@ def make_psea_table(
     norm = ctx.get_action("pepsirf", "norm")
     zenrich = ctx.get_action("ps-plot", "zenrich")
 
-    # TODO: remove when finished testing
-    pd.set_option("display.max_rows", 1000)
-    pd.set_option("display.max_columns", 1000)
-    pd.set_option("display.precision", 4)
-
     # collect zscores -> is there a better place to do this?
     scores = pd.read_csv(scores_file, sep="\t", index_col=0)
     # collect pairs
@@ -62,7 +57,7 @@ def make_psea_table(
     # process scores
     processed_scores = process_scores(scores, pairs)
     # save to disk for zenrich plot creation
-    processed_scores.to_csv("py_processed_scores.tsv", sep="\t", index=False)
+    processed_scores.to_csv("py_processed_scores.tsv", sep="\t", index=True)
 
     # # run psea for pairs
     # table_num = 1
@@ -236,19 +231,6 @@ def process_scores(scores, pairs) -> pd.DataFrame:
     base = 2
     offset = 3
     power = pow(base, offset)
-
-    data1 = scores.apply(lambda row: power + row, axis=0)
-
-    data1.to_csv("data1_with_pow_applied.tsv", sep="\t")
-
-    # data1[data1<1]=1 in R
-    data1 = data1.apply(
-        lambda row: row.apply(lambda val: 1 if val < 1 else val),
-        axis=0
-    )
-
-    data1.to_csv("data1_where_values_1_or_greater.tsv", sep="\t")
-
     # collect unique replicates from pairs
     reps_list = []
     for pair in pairs:
@@ -256,11 +238,15 @@ def process_scores(scores, pairs) -> pd.DataFrame:
             reps_list.append(rep)
     reps_list = list(np.unique(reps_list))
     # exclude unused replicates
-    data2 = data1.loc[:, reps_list]
+    processed_scores = scores.loc[:, reps_list]
+    # process scores
+    processed_scores = scores.apply(lambda row: power + row, axis=0)
+    processed_scores = processed_scores.apply(
+        lambda row: row.apply(lambda val: 1 if val < 1 else val),
+        axis=0
+    )
 
-    data2.to_csv("data2_without_excludes.tsv", sep="\t")
-
-    return data2.apply(
+    return processed_scores.apply(
         lambda row: row.apply(lambda val: log(val, base) - offset)
     )
 
