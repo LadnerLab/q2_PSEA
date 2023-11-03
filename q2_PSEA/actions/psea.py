@@ -42,50 +42,52 @@ def make_psea_table(
     norm = ctx.get_action("pepsirf", "norm")
     zenrich = ctx.get_action("ps-plot", "zenrich")
 
+    # TODO: remove when finished testing
     pd.set_option("display.max_rows", 1000)
     pd.set_option("display.max_columns", 1000)
-    pd.set_option("display.precision", 9)
+    pd.set_option("display.precision", 4)
 
-    # collect zscores
+    # collect zscores -> is there a better place to do this?
     scores = pd.read_csv(scores_file, sep="\t", index_col=0)
-    # TODO: tentative code for reading and formatting time points and pairs
-    #     1) ensure pairs file MUST be specified
-    #     2) ensure timepoints file MUST be specified
-    #     3) read scores matrix here
-    # collect sample pairs
+    # collect pairs
     with open(pairs_file, "r") as fh:
-        lines = [line.replace("\n", "") for line in fh.readlines()]
-        pairs = [tuple(lines[i:i+2]) for i in range(0, len(lines), 2)]
+        pairs = [
+            tuple(line.replace("\n", "").split())
+            for line in fh.readlines()
+        ]
     # collect timepoints
     with open(timepoints_file, "r") as fh:
         timepoints = fh.readlines()[0].strip().split()
+    print(f"Pairs: {pairs}\n")
 
+    # process scores
     processed_scores = process_scores(scores, pairs)
     # save to disk for zenrich plot creation
-    processed_scores.to_csv("processed_scores.tsv", sep="\t")
+    processed_scores.to_csv("py_processed_scores.tsv", sep="\t", index=False)
 
-    table_num = 1
-    for pair in pairs:
-        # run PSEA operation for current pair
-        spline_tup = max_delta_by_spline(processed_scores, pair)
-        maxZ = spline_tup[0]
-        deltaZ = spline_tup[1]
-        # spline_x = spline_tup[2]
-        # spline_y = spline_tup[3]
+    # # run psea for pairs
+    # table_num = 1
+    # for pair in pairs:
+    #     # run PSEA operation for current pair
+    #     spline_tup = max_delta_by_spline(processed_scores, pair)
+    #     maxZ = spline_tup[0]
+    #     deltaZ = spline_tup[1]
+    #     # spline_x = spline_tup[2]
+    #     # spline_y = spline_tup[3]
 
-        table = psea(
-            maxZ=maxZ,
-            deltaZ=deltaZ,
-            gene_sets_file=gene_sets_file,
-            threshold=threshold,
-            min_size=min_size,
-            max_size=max_size,
-            threads=threads,
-            permutation_num=10000,
-            outdir="table_outdir"
-        )
-        print(f"PSEA result table:\n{table.res2d}")
-        table_num += 1
+    #     table = psea(
+    #         maxZ=maxZ,
+    #         deltaZ=deltaZ,
+    #         gene_sets_file=gene_sets_file,
+    #         threshold=threshold,
+    #         min_size=min_size,
+    #         max_size=max_size,
+    #         threads=threads,
+    #         permutation_num=10000,
+    #         outdir="table_outdir"
+    #     )
+    #     print(f"PSEA result table:\n{table.res2d}")
+    #     table_num += 1
 
     # import score data as artifacts
     # scores_artifact = ctx.make_artifact(
@@ -224,8 +226,11 @@ def psea(
     )
 
 
+# TODO: maybe this is the best place to also load zscores to reduce memory
+# usage
 def process_scores(scores, pairs) -> pd.DataFrame:
-    """Reads Z score matrix
+    """Grabs replicates specified `pairs` from scores matrix and processes
+    those remaining scores
 
     Returns a Pandas DataFrame of processed Z scores
     """
@@ -234,19 +239,29 @@ def process_scores(scores, pairs) -> pd.DataFrame:
     power = pow(base, offset)
 
     data1 = scores.apply(lambda row: power + row, axis=0)
+
+    data1.to_csv("data1_with_pow_applied.tsv", sep="\t")
+
+    # data1[data1<1]=1 in R
     data1 = data1.apply(
         lambda row: row.apply(lambda val: 1 if val < 1 else val),
         axis=0
     )
 
-    # extrapolate list of column names from pairs list
-    pairs_list = []
+    data1.to_csv("data1_where_values_1_or_greater.tsv", sep="\t")
+
+    # collect unique replicates from pairs
+    reps_list = []
     for pair in pairs:
-        for sample in pair:
-            pairs_list.append(sample)
-    pairs_list = list(np.unique(pairs_list))
-    # grab columns from data1
-    data2 = data1.loc[:, pairs_list]
+        for rep in pair:
+            print(f"Rep ({rep}) from pair ({pair})")
+            reps_list.append(rep)
+    reps_list = list(np.unique(reps_list))
+    print(f"Replicates list: {reps_list}\n\n")
+    # exclude unused replicates
+    data2 = data1.loc[:, reps_list]
+
+    data2.to_csv("data2_without_excludes.tsv", sep="\t")
 
     return data2.apply(
         lambda row: row.apply(lambda val: log(val, base) - offset)
