@@ -5,9 +5,9 @@ import qiime2
 
 from math import pow, log
 from scipy import interpolate
-from q2_pepsirf.format_types import (
-    PepsirfContingencyTSVFormat, PepsirfInfoSNPNFormat
-)
+# from q2_pepsirf.format_types import (
+#     PepsirfContingencyTSVFormat, PepsirfInfoSNPNFormat
+# )
 
 
 def generate_metadata(replicates):
@@ -22,7 +22,6 @@ def generate_metadata(replicates):
     meta_series = pd.Series(data=base_reps, index=replicates)
     meta_series.index.name = "sample-id"
     meta_series.name = "source"
-    print(f"\n\nMeta-series:\n{meta_series}\n\n")
 
     return qiime2.metadata.CategoricalMetadataColumn(meta_series)
 
@@ -39,8 +38,8 @@ def make_psea_table(
         threads=4,
         pepsirf_binary="pepsirf"
 ):
-    norm = ctx.get_action("pepsirf", "norm")
-    zenrich = ctx.get_action("ps-plot", "zenrich")
+    # norm = ctx.get_action("pepsirf", "norm")
+    # zenrich = ctx.get_action("ps-plot", "zenrich")
 
     # collect zscores -> is there a better place to do this?
     scores = pd.read_csv(scores_file, sep="\t", index_col=0)
@@ -57,31 +56,35 @@ def make_psea_table(
     # process scores
     processed_scores = process_scores(scores, pairs)
     # save to disk for zenrich plot creation
-    processed_scores.to_csv("processed_scores.tsv", sep="\t", index=True)
+    processed_scores.to_csv("processed_scores.tsv", sep="\t")
 
-    # run psea for pairs
-    table_num = 1
-    for pair in pairs:
-        # run PSEA operation for current pair
-        spline_tup = max_delta_by_spline(processed_scores, pair)
-        maxZ = spline_tup[0]
-        deltaZ = spline_tup[1]
-        # spline_x = spline_tup[2]
-        # spline_y = spline_tup[3]
+    # TODO: reimplement loop to cover all defined pairs
+    # run PSEA operation for current pair
+    spline_tup = max_delta_by_spline(
+        processed_scores,
+        ["070060_D360.Pro_PV2T", "070060_D540.Pro_PV2T"]
+    )
+    maxZ = spline_tup[0]
+    deltaZ = spline_tup[1]
+    # spline_x = spline_tup[2]
+    # spline_y = spline_tup[3]
 
-        table = psea(
-            maxZ=maxZ,
-            deltaZ=deltaZ,
-            gene_sets_file=gene_sets_file,
-            threshold=threshold,
-            min_size=min_size,
-            max_size=max_size,
-            threads=threads,
-            permutation_num=10000,
-            outdir="table_outdir"
-        )
-        print(f"PSEA result table:\n{table.res2d}")
-        table_num += 1
+    # maxZ matches between versions
+    deltaZ.to_csv("deltaZ.tsv", sep="\t")
+
+    table = psea(
+        maxZ=maxZ,
+        deltaZ=deltaZ,
+        gene_sets_file=gene_sets_file,
+        threshold=threshold,
+        min_size=min_size,
+        max_size=max_size,
+        threads=threads,
+        permutation_num=10000,
+        outdir="table_outdir"
+    )
+    res = table.res2d.loc[:, ["Term", "NOM p-val", "FDR q-val", "FWER p-val"]]
+    res.to_csv("py_psea_res_nperm_10000.tsv", sep="\t", index=False)
 
     # import score data as artifacts
     # scores_artifact = ctx.make_artifact(
@@ -121,7 +124,7 @@ def make_psea_table(
     return qiime2.sdk.Visualization
 
 
-def max_delta_by_spline(data, pair) -> tuple:
+def max_delta_by_spline(data, timepoints) -> tuple:
     """Finds the maximum value between two samples, and calculates the
     difference in Z score for each peptide
 
@@ -139,12 +142,12 @@ def max_delta_by_spline(data, pair) -> tuple:
         Contains maximum Z score, the difference (delta) in actual from
         predicted Z scores, the spline values for x and y
     """
-    maxZ = np.apply_over_axes(np.max, data.loc[:, pair], 1)
+    maxZ = np.apply_over_axes(np.max, data.loc[:, timepoints], 1)
 
     # perform smoothing spline prediction
-    y = data.loc[:, pair[0]].to_numpy()
-    x = data.loc[:, pair[1]].to_numpy()
-    # tentative magic number 5 (knots) came from tutorial linked above
+    y = data.loc[:, timepoints[0]].to_numpy()
+    x = data.loc[:, timepoints[1]].to_numpy()
+    # tentative magic number 5 knots came from tutorial linked above
     smooth_spline = spline(5, y)
     deltaZ = y - smooth_spline(x)
 
@@ -240,7 +243,7 @@ def process_scores(scores, pairs) -> pd.DataFrame:
     # exclude unused replicates
     processed_scores = scores.loc[:, reps_list]
     # process scores
-    processed_scores = scores.apply(lambda row: power + row, axis=0)
+    processed_scores = processed_scores.apply(lambda row: power + row, axis=0)
     processed_scores = processed_scores.apply(
         lambda row: row.apply(lambda val: 1 if val < 1 else val),
         axis=0
@@ -257,8 +260,6 @@ def spline(knots, y):
 
     Parameters
     ----------
-    knots : int
-
     y : float array
 
     Returns
