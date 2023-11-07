@@ -56,7 +56,7 @@ def make_psea_table(
     # process scores
     processed_scores = process_scores(scores, pairs)
     # save to disk for zenrich plot creation
-    processed_scores.to_csv("processed_scores.tsv", sep="\t")
+    # processed_scores.to_csv("processed_scores.tsv", sep="\t")
 
     # TODO: reimplement loop to cover all defined pairs
     # run PSEA operation for current pair
@@ -68,9 +68,6 @@ def make_psea_table(
     deltaZ = spline_tup[1]
     # spline_x = spline_tup[2]
     # spline_y = spline_tup[3]
-
-    # maxZ matches between versions
-    deltaZ.to_csv("deltaZ.tsv", sep="\t")
 
     table = psea(
         maxZ=maxZ,
@@ -153,7 +150,10 @@ def max_delta_by_spline(data, timepoints) -> tuple:
 
     # convert maxZ and deltaZ to pandas Series - allows for association of
     # values with peptides
-    maxZ = pd.Series(data=[num for num in maxZ], index=data.index)
+    maxZ = pd.Series(
+        data=[num for elem in maxZ for num in elem],
+        index=data.index
+    )
     deltaZ = pd.Series(data=deltaZ, index=data.index)
 
     return (maxZ, deltaZ, smooth_spline(x), smooth_spline(y))
