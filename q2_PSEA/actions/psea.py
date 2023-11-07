@@ -211,16 +211,18 @@ def psea(
     # 3) ask if we want to pass output director to ssgsea
     # 4) see about if plotting feature is useful and generates the plots we
     # want (`no_plot`)
-    return gp.ssgsea(
+    res = gp.ssgsea(
         data=gene_list,
         gene_sets=gene_sets_file,
         outdir=outdir,
         min_size=min_size,
         max_size=max_size,
         permutation_num=permutation_num,  # TODO: keep in mind this is here
-        weight=threshold,
+        weight=threshold,  # TODO: verify equivocation is correct
         threads=threads
     )
+
+    return res
 
 
 # TODO: maybe this is the best place to also load zscores to reduce memory
