@@ -9,6 +9,9 @@ from scipy import interpolate
 #     PepsirfContingencyTSVFormat, PepsirfInfoSNPNFormat
 # )
 
+# TODO:
+# 1) change mention of "gene(s)" to "peptide(s)"
+
 
 def generate_metadata(replicates):
     base_reps = []
@@ -54,9 +57,12 @@ def make_psea_table(
         timepoints = fh.readlines()[0].strip().split()
 
     # process scores
-    processed_scores = process_scores(scores, pairs)
+    processed_scores = process_scores(scores, pairs, gene_sets_file)
     # save to disk for zenrich plot creation
-    # processed_scores.to_csv("processed_scores.tsv", sep="\t")
+    processed_scores.to_csv(
+        "py_processed_scores_rows_mod_with_input.tsv",
+        sep="\t"
+    )
 
     # TODO: reimplement loop to cover all defined pairs
     # run PSEA operation for current pair
@@ -69,6 +75,9 @@ def make_psea_table(
     # spline_x = spline_tup[2]
     # spline_y = spline_tup[3]
 
+    # maxZ.to_csv("py_files_for_comparison/py_maxZ.tsv", sep="\t")
+    # deltaZ.to_csv("py_files_for_comparison/py_deltaZ.tsv", sep="\t")
+
     table = psea(
         maxZ=maxZ,
         deltaZ=deltaZ,
@@ -80,8 +89,18 @@ def make_psea_table(
         permutation_num=10000,
         outdir="table_outdir"
     )
+    # table.res2d.to_csv("py_table.tsv", sep="\t")
     res = table.res2d.loc[:, ["Term", "NOM p-val", "FDR q-val", "FWER p-val"]]
-    res.to_csv("py_psea_res_nperm_10000.tsv", sep="\t", index=False)
+    # # table.res2d.loc[:, ["Term", "Lead_genes"]].to_csv(
+    #     "gene_sets.tsv",
+    #     sep="\t",
+    #     index=False
+    # )
+    # res.to_csv(
+    #     "py_files_for_comparison/py_psea_res_nperm_10000.tsv",
+    #     sep="\t",
+    #     index=False
+    # )
 
     # import score data as artifacts
     # scores_artifact = ctx.make_artifact(
@@ -205,6 +224,9 @@ def psea(
         np.intersect1d(maxZ_above_thresh, deltaZ_not_zero)
     ].sort_values(ascending=False)
 
+    # gene_list.to_csv("py_files_for_comparison/py_gene_list.tsv", sep="\t")
+    print(f"Type of gene list: {type(gene_list)}")
+
     # TODO:
     # 1) ask if `seed` needs to be set, and to what?
     # 2) ask if `scale` should be True
@@ -222,12 +244,32 @@ def psea(
         threads=threads
     )
 
+    # TODO: uncomment and continue work on when finished analyzing GSEA funcs
+    # maxZ_indexes = list(maxZ_above_thresh[0])
+    # # collect peptides
+    # gene_sets = pd.DataFrame(
+    #     data=[gene_str for gene_str in res.res2d.loc[:, "Lead_genes"]],
+    #     index=res.res2d.loc[:, "Term"],
+    #     columns=["Lead_genes"]
+    # )
+    # # # gene_sets.to_csv("gene_sets.tsv", sep="\t")
+    # all_peptides = []
+    # peptides_above_thresh = maxZ.iloc[maxZ_indexes]
+    # # print(f"Peptides about threshold:\n{list(peptides_above_thresh)}\n\n")
+    # for id in list(gene_sets.index):
+    #     trunc_pep_list = []
+    #     pep_list = gene_sets.loc[id].iloc[0].split(";")
+    #     for pep in pep_list:
+    #         if pep in peptides_above_thresh:
+    #             trunc_pep_list.append(pep)
+    #     all_peptides.append(trunc_pep_list)
+
     return res
 
 
 # TODO: maybe this is the best place to also load zscores to reduce memory
 # usage
-def process_scores(scores, pairs) -> pd.DataFrame:
+def process_scores(scores, pairs, gene_sets_file) -> pd.DataFrame:
     """Grabs replicates specified `pairs` from scores matrix and processes
     those remaining scores
 
@@ -250,7 +292,21 @@ def process_scores(scores, pairs) -> pd.DataFrame:
         lambda row: row.apply(lambda val: 1 if val < 1 else val),
         axis=0
     )
-
+    # remove peptides not present in gene set file
+    pep_list = []
+    with open(gene_sets_file, "r") as fh:
+        lines = [line.replace("\n", "").split("\t") for line in fh.readlines()]
+        # remove tax IDs
+        for line in lines:
+            line.pop(0)
+            for pep in line:
+                pep_list.append(pep)
+    # reorder peptides -- least to greatest according to character value
+    # (i.e. ["PV2T_000000", "PV2T_000001", ...])
+    # pep_list = sorted(pep_list)
+    # remove unspecified peptides from processed score matrix
+    pep_list = processed_scores.index.difference(pep_list)
+    processed_scores = processed_scores.drop(index=pep_list)
     return processed_scores.apply(
         lambda row: row.apply(lambda val: log(val, base) - offset)
     )
