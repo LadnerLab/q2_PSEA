@@ -57,11 +57,6 @@ def make_psea_table(
     #     timepoints = fh.readlines()[0].strip().split()
     # process scores
     processed_scores = process_scores(scores, pairs, gene_sets_file)
-    # save to disk for zenrich plot creation
-    processed_scores.to_csv(
-        "processed_scores_with_rows_mod_by_pep_tax_list.tsv",
-        sep="\t"
-    )
 
     # TODO: reimplement loop to cover all defined pairs
     # run PSEA operation for current pair
@@ -73,9 +68,6 @@ def make_psea_table(
     deltaZ = spline_tup[1]
     # spline_x = spline_tup[2]
     # spline_y = spline_tup[3]
-
-    # maxZ.to_csv("py_maxZ_rows_mod_with_input.tsv", sep="\t")
-    # deltaZ.to_csv("py_files_for_comparison/py_deltaZ.tsv", sep="\t")
 
     table = psea(
         maxZ=maxZ,
@@ -223,9 +215,6 @@ def psea(
         np.intersect1d(maxZ_above_thresh, deltaZ_not_zero)
     ].sort_values(ascending=False)
 
-    # gene_list.to_csv("py_files_for_comparison/py_gene_list.tsv", sep="\t")
-    # print(f"Type of gene list: {type(gene_list)}")
-
     # TODO:
     # 1) ask if `seed` needs to be set, and to what?
     # 2) ask if `scale` should be True
@@ -284,8 +273,6 @@ def process_scores(scores, pairs, gene_sets_file) -> pd.DataFrame:
             reps_list.append(rep)
     reps_list = list(np.unique(reps_list))
     # exclude unused replicates
-    # with open("reps_list.tsv", "w") as fh:
-    #     fh.write(f"{reps_list}")
     processed_scores = scores.loc[:, reps_list]
     # process scores
     processed_scores = processed_scores.apply(lambda row: power + row, axis=0)
@@ -304,9 +291,6 @@ def process_scores(scores, pairs, gene_sets_file) -> pd.DataFrame:
             line.pop(0)
             for pep in line:
                 pep_list.append(pep)
-    # reorder peptides -- least to greatest according to character value
-    # (i.e. ["PV2T_000000", "PV2T_000001", ...])
-    # pep_list = sorted(pep_list)
     # remove unspecified peptides from processed score matrix
     pep_list = processed_scores.index.difference(pep_list)
     processed_scores = processed_scores.drop(index=pep_list)
