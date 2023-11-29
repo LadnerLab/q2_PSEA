@@ -52,15 +52,14 @@ def make_psea_table(
             tuple(line.replace("\n", "").split("\t"))
             for line in fh.readlines()
         ]
-    # collect timepoints
-    with open(timepoints_file, "r") as fh:
-        timepoints = fh.readlines()[0].strip().split()
-
+    # collect timepoints -- will need when using user specified timepoints
+    # with open(timepoints_file, "r") as fh:
+    #     timepoints = fh.readlines()[0].strip().split()
     # process scores
     processed_scores = process_scores(scores, pairs, gene_sets_file)
     # save to disk for zenrich plot creation
     processed_scores.to_csv(
-        "py_processed_scores_rows_mod_with_input.tsv",
+        "processed_scores_with_rows_mod_by_pep_tax_list.tsv",
         sep="\t"
     )
 
@@ -75,7 +74,7 @@ def make_psea_table(
     # spline_x = spline_tup[2]
     # spline_y = spline_tup[3]
 
-    # maxZ.to_csv("py_files_for_comparison/py_maxZ.tsv", sep="\t")
+    # maxZ.to_csv("py_maxZ_rows_mod_with_input.tsv", sep="\t")
     # deltaZ.to_csv("py_files_for_comparison/py_deltaZ.tsv", sep="\t")
 
     table = psea(
@@ -91,16 +90,16 @@ def make_psea_table(
     )
     # table.res2d.to_csv("py_table.tsv", sep="\t")
     res = table.res2d.loc[:, ["Term", "NOM p-val", "FDR q-val", "FWER p-val"]]
-    # # table.res2d.loc[:, ["Term", "Lead_genes"]].to_csv(
+    # table.res2d.loc[:, ["Term", "Lead_genes"]].to_csv(
     #     "gene_sets.tsv",
     #     sep="\t",
     #     index=False
     # )
-    # res.to_csv(
-    #     "py_files_for_comparison/py_psea_res_nperm_10000.tsv",
-    #     sep="\t",
-    #     index=False
-    # )
+    res.to_csv(
+        "psea_res_nperm_10000.tsv",
+        sep="\t",
+        index=False
+    )
 
     # import score data as artifacts
     # scores_artifact = ctx.make_artifact(
@@ -225,7 +224,7 @@ def psea(
     ].sort_values(ascending=False)
 
     # gene_list.to_csv("py_files_for_comparison/py_gene_list.tsv", sep="\t")
-    print(f"Type of gene list: {type(gene_list)}")
+    # print(f"Type of gene list: {type(gene_list)}")
 
     # TODO:
     # 1) ask if `seed` needs to be set, and to what?
@@ -240,7 +239,7 @@ def psea(
         min_size=min_size,
         max_size=max_size,
         permutation_num=permutation_num,  # TODO: keep in mind this is here
-        weight=threshold,  # TODO: verify equivocation is correct
+        # weight=threshold,  # TODO: verify equivocation
         threads=threads
     )
 
@@ -285,6 +284,8 @@ def process_scores(scores, pairs, gene_sets_file) -> pd.DataFrame:
             reps_list.append(rep)
     reps_list = list(np.unique(reps_list))
     # exclude unused replicates
+    # with open("reps_list.tsv", "w") as fh:
+    #     fh.write(f"{reps_list}")
     processed_scores = scores.loc[:, reps_list]
     # process scores
     processed_scores = processed_scores.apply(lambda row: power + row, axis=0)
@@ -294,6 +295,8 @@ def process_scores(scores, pairs, gene_sets_file) -> pd.DataFrame:
     )
     # remove peptides not present in gene set file
     pep_list = []
+    # TODO: maybe I can pull this info out and pass to ssgsea instead of the
+    # file name
     with open(gene_sets_file, "r") as fh:
         lines = [line.replace("\n", "").split("\t") for line in fh.readlines()]
         # remove tax IDs
