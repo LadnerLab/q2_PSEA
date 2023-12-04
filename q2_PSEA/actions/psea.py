@@ -34,10 +34,11 @@ def make_psea_table(
         scores_file,
         timepoints_file,
         pairs_file,
-        gene_sets_file,
+        peptide_sets_file,
         threshold,
-        min_size,
-        max_size,
+        min_size=15,
+        max_size=2000,
+        permutation_num=0,  # TODO: check if our user would be required to pass
         threads=4,
         pepsirf_binary="pepsirf"
 ):
@@ -56,7 +57,7 @@ def make_psea_table(
     # with open(timepoints_file, "r") as fh:
     #     timepoints = fh.readlines()[0].strip().split()
     # process scores
-    processed_scores = process_scores(scores, pairs, gene_sets_file)
+    processed_scores = process_scores(scores, pairs, peptide_sets_file)
 
     # TODO: reimplement loop to cover all defined pairs
     # run PSEA operation for current pair
@@ -72,26 +73,14 @@ def make_psea_table(
     table = psea(
         maxZ=maxZ,
         deltaZ=deltaZ,
-        gene_sets_file=gene_sets_file,
+        peptide_sets_file=peptide_sets_file,
         threshold=threshold,
         min_size=min_size,
         max_size=max_size,
+        permutation_num=permutation_num,
         threads=threads,
-        permutation_num=10000,
         outdir="table_outdir"
     )
-    table.to_csv("psea_table.tsv", sep="\t", index=False)
-    # res = table.res2d.loc[:, ["Term", "NOM p-val", "FDR q-val", "FWER p-val"]]
-    # table.res2d.loc[:, ["Term", "Lead_genes"]].to_csv(
-    #     "gene_sets.tsv",
-    #     sep="\t",
-    #     index=False
-    # )
-    # res.to_csv(
-    #     "psea_res_nperm_10000.tsv",
-    #     sep="\t",
-    #     index=False
-    # )
 
     # import score data as artifacts
     # scores_artifact = ctx.make_artifact(
@@ -126,9 +115,7 @@ def make_psea_table(
     #     negative_controls=None
     # )
 
-    # TODO: remove temp "processed_scores.tsv" file
-    # return zenrich_plot
-    return qiime2.sdk.Visualization
+    return qiime2.sdk.Result
 
 
 def max_delta_by_spline(data, timepoints) -> tuple:
@@ -172,7 +159,7 @@ def max_delta_by_spline(data, timepoints) -> tuple:
 def psea(
     maxZ: pd.Series,
     deltaZ: pd.Series,
-    gene_sets_file: str,
+    peptide_sets_file: str,
     threshold: float,
     permutation_num: int = 0,
     min_size: int = 15,
@@ -189,7 +176,7 @@ def psea(
 
     deltaZ : pd.Series
 
-    gene_sets_file : str
+    peptide_sets_file : str
 
     threshold : float
 
@@ -210,8 +197,8 @@ def psea(
     maxZ_above_thresh = np.where(maxZ > threshold)
     deltaZ_not_zero = np.where(deltaZ != 0)
 
-    # create gene list will
-    gene_list = deltaZ.iloc[
+    # create peptide list will
+    peptide_list = deltaZ.iloc[
         np.intersect1d(maxZ_above_thresh, deltaZ_not_zero)
     ].sort_values(ascending=False)
 
@@ -222,8 +209,8 @@ def psea(
     # 4) see about if plotting feature is useful and generates the plots we
     # want (`no_plot`)
     res = gp.ssgsea(
-        data=gene_list,
-        gene_sets=gene_sets_file,
+        data=peptide_list,
+        gene_sets=peptide_sets_file,
         outdir=outdir,
         min_size=min_size,
         max_size=max_size,
@@ -254,7 +241,7 @@ def psea(
 
 # TODO: maybe this is the best place to also load zscores to reduce memory
 # usage
-def process_scores(scores, pairs, gene_sets_file) -> pd.DataFrame:
+def process_scores(scores, pairs, peptide_sets_file) -> pd.DataFrame:
     """Grabs replicates specified `pairs` from scores matrix and processes
     those remaining scores
 
@@ -277,11 +264,11 @@ def process_scores(scores, pairs, gene_sets_file) -> pd.DataFrame:
         lambda row: row.apply(lambda val: 1 if val < 1 else val),
         axis=0
     )
-    # remove peptides not present in gene set file
+    # remove peptides not present in peptide set file
     pep_list = []
     # TODO: maybe I can pull this info out and pass to ssgsea instead of the
     # file name
-    with open(gene_sets_file, "r") as fh:
+    with open(peptide_sets_file, "r") as fh:
         lines = [line.replace("\n", "").split("\t") for line in fh.readlines()]
         # remove tax IDs
         for line in lines:

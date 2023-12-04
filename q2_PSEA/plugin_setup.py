@@ -24,10 +24,11 @@ plugin.pipelines.register_function(
         "scores_file": Str,
         "timepoints_file": Str,
         "pairs_file": Str,
-        "gene_sets_file": Str,
+        "peptide_sets_file": Str,
         "threshold": Float,
         "min_size": Int,
         "max_size": Int,
+        "permutation_num": Int,
         "threads": Int,
         "pepsirf_binary": Str
     },
@@ -37,12 +38,16 @@ plugin.pipelines.register_function(
             " referencing the time a sample was taken.",
         "pairs_file": "Name of tab-delimited file containing pairs of"
             " sample names.",
-        "gene_sets_file": "Name of GMT formatted file containing information"
-            " about viruses and their peptides.",
+        "peptide_sets_file": "Name of GMT formatted file containing information"
+            " about species and their peptides.",
         "threshold" : "",
-        "min_size": "",
-        "max_size": "",
-        "threads": "Number of threads with which to run GSEA operation.",
+        "min_size": "Minimum allowed number of peptides from peptide set also"
+            " the data set.",
+        "max_size": "Maximum allowed number of peptides from peptide set also"
+            " the data set.",
+        "permutation_num": "Number of permutations. Minimal possible nominal"
+            " p-value is about 1/perm.",
+        "threads": "Number of threads with which to run ssGSEA operation.",
         "pepsirf_binary": "Path to pepsirf binary."
     },
     outputs=[("zenrich_plot", Visualization)],
