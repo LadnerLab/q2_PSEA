@@ -80,18 +80,18 @@ def make_psea_table(
         permutation_num=10000,
         outdir="table_outdir"
     )
-    # table.res2d.to_csv("py_table.tsv", sep="\t")
-    res = table.res2d.loc[:, ["Term", "NOM p-val", "FDR q-val", "FWER p-val"]]
+    table.to_csv("psea_table.tsv", sep="\t", index=False)
+    # res = table.res2d.loc[:, ["Term", "NOM p-val", "FDR q-val", "FWER p-val"]]
     # table.res2d.loc[:, ["Term", "Lead_genes"]].to_csv(
     #     "gene_sets.tsv",
     #     sep="\t",
     #     index=False
     # )
-    res.to_csv(
-        "psea_res_nperm_10000.tsv",
-        sep="\t",
-        index=False
-    )
+    # res.to_csv(
+    #     "psea_res_nperm_10000.tsv",
+    #     sep="\t",
+    #     index=False
+    # )
 
     # import score data as artifacts
     # scores_artifact = ctx.make_artifact(
@@ -231,28 +231,25 @@ def psea(
         # weight=threshold,  # TODO: verify equivocation
         threads=threads
     )
+    pre_res = res.res2d.loc[:, [
+        "Term", "ES", "NES", "NOM p-val", "FDR q-val", "FWER p-val"
+    ]]
+    # collect names of peptides with max z scores above threshold
+    maxZ_peptides = maxZ.index.to_list()
+    peps_above_thresh = []
+    for i in list(maxZ_above_thresh[0]):
+        peps_above_thresh.append(maxZ_peptides[i])
+    # collect peptides which have max z scores greater than `threshold`
+    tested_peps = res.res2d.loc[:, "Lead_genes"].apply(
+        # joins peptides in a semicolon (;) delimited string
+        lambda peps: ";".join(
+            [pep for pep in np.intersect1d(peps.split(";"), peps_above_thresh)]
+        )
+    )
+    # append tested peptides `pre_res`
+    pre_res.insert(len(pre_res.columns), "Tested Peptides", tested_peps.values)
 
-    # TODO: uncomment and continue work on when finished analyzing GSEA funcs
-    # maxZ_indexes = list(maxZ_above_thresh[0])
-    # # collect peptides
-    # gene_sets = pd.DataFrame(
-    #     data=[gene_str for gene_str in res.res2d.loc[:, "Lead_genes"]],
-    #     index=res.res2d.loc[:, "Term"],
-    #     columns=["Lead_genes"]
-    # )
-    # # # gene_sets.to_csv("gene_sets.tsv", sep="\t")
-    # all_peptides = []
-    # peptides_above_thresh = maxZ.iloc[maxZ_indexes]
-    # # print(f"Peptides about threshold:\n{list(peptides_above_thresh)}\n\n")
-    # for id in list(gene_sets.index):
-    #     trunc_pep_list = []
-    #     pep_list = gene_sets.loc[id].iloc[0].split(";")
-    #     for pep in pep_list:
-    #         if pep in peptides_above_thresh:
-    #             trunc_pep_list.append(pep)
-    #     all_peptides.append(trunc_pep_list)
-
-    return res
+    return pre_res
 
 
 # TODO: maybe this is the best place to also load zscores to reduce memory
