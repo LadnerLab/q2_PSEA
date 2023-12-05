@@ -9,9 +9,6 @@ from scipy import interpolate
 #     PepsirfContingencyTSVFormat, PepsirfInfoSNPNFormat
 # )
 
-# TODO:
-# 1) change mention of "gene(s)" to "peptide(s)"
-
 
 def generate_metadata(replicates):
     base_reps = []
@@ -35,7 +32,8 @@ def make_psea_table(
         timepoints_file,
         pairs_file,
         peptide_sets_file,
-        threshold,
+        threshold,  # TODO: ask for suggested default value
+        species_tax_file=None,
         min_size=15,
         max_size=2000,
         permutation_num=0,  # TODO: check if our user would be required to pass
@@ -53,7 +51,7 @@ def make_psea_table(
             tuple(line.replace("\n", "").split("\t"))
             for line in fh.readlines()
         ]
-    # collect timepoints -- will need when using user specified timepoints
+    # collect timepoints
     # with open(timepoints_file, "r") as fh:
     #     timepoints = fh.readlines()[0].strip().split()
     # process scores
@@ -74,6 +72,7 @@ def make_psea_table(
         maxZ=maxZ,
         deltaZ=deltaZ,
         peptide_sets_file=peptide_sets_file,
+        species_tax_file=species_tax_file,
         threshold=threshold,
         min_size=min_size,
         max_size=max_size,
@@ -81,6 +80,7 @@ def make_psea_table(
         threads=threads,
         outdir="table_outdir"
     )
+    table.to_csv("psea_table.tsv", sep="\t", index=False)
 
     # import score data as artifacts
     # scores_artifact = ctx.make_artifact(
@@ -160,6 +160,7 @@ def psea(
     maxZ: pd.Series,
     deltaZ: pd.Series,
     peptide_sets_file: str,
+    species_tax_file: str,
     threshold: float,
     permutation_num: int = 0,
     min_size: int = 15,
@@ -177,6 +178,8 @@ def psea(
     deltaZ : pd.Series
 
     peptide_sets_file : str
+
+    species_tax_file : str
 
     threshold : float
 
@@ -218,9 +221,31 @@ def psea(
         # weight=threshold,  # TODO: verify equivocation
         threads=threads
     )
-    pre_res = res.res2d.loc[:, [
-        "Term", "ES", "NES", "NOM p-val", "FDR q-val", "FWER p-val"
-    ]]
+
+    # check that species names are important
+    if species_tax_file is not None:
+        # grab result table and include "Name" column
+        pre_res = res.res2d.loc[:, [
+            "Name", "Term", "ES", "NES", "NOM p-val", "FDR q-val", "FWER p-val"
+        ]]
+        # grab species name to taxanomic ID mapping
+        species_tax_map = pd.read_csv(
+            species_tax_file,
+            sep="\t",
+            header=None,
+            index_col=0
+        )
+        # match names in PSEA result table with taxanomic IDs
+        names = species_tax_map.index.to_list()
+        for i in range(species_tax_map.iloc[:, 0].size):
+            id = species_tax_map.iloc[i, 0]
+            pre_res["Name"][pre_res.Term == str(id)] = names[i]
+    # otherwise, assume species names are not important
+    else:
+        pre_res = res.res2d.loc[:, [
+            "Term", "ES", "NES", "NOM p-val", "FDR q-val", "FWER p-val"
+        ]]
+
     # collect names of peptides with max z scores above threshold
     maxZ_peptides = maxZ.index.to_list()
     peps_above_thresh = []

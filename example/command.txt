@@ -2,6 +2,7 @@ qiime psea make-psea-table --p-scores-file ../../example/IM0031_PV2T_25nt_raw_2m
 --p-timepoints-file ../../example/timepoints.tsv \
 --p-pairs-file ../../example/pairs.tsv \
 --p-peptide-sets-file ../../example/input.gmt \
+--p-species-tax-file ../../example/species_tax.tsv \
 --p-threshold 0.750000 \
 --p-min-size 3 \
 --p-max-size 5000 \

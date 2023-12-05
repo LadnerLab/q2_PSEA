@@ -25,6 +25,7 @@ plugin.pipelines.register_function(
         "timepoints_file": Str,
         "pairs_file": Str,
         "peptide_sets_file": Str,
+        "species_tax_file": Str,
         "threshold": Float,
         "min_size": Int,
         "max_size": Int,
@@ -38,8 +39,10 @@ plugin.pipelines.register_function(
             " referencing the time a sample was taken.",
         "pairs_file": "Name of tab-delimited file containing pairs of"
             " sample names.",
-        "peptide_sets_file": "Name of GMT formatted file containing information"
-            " about species and their peptides.",
+        "peptide_sets_file": "Name of GMT formatted file containing"
+            " information about species and their peptides.",
+        "species_tax_file": "Name of tab-delimited file containing species"
+            " name and taxanomy ID associations.",
         "threshold" : "",
         "min_size": "Minimum allowed number of peptides from peptide set also"
             " the data set.",
