@@ -1,13 +1,12 @@
 import gseapy as gp
 import numpy as np
 import pandas as pd
+import rpy2.robjects as ro
 import qiime2
 
 from math import pow, log
+from rpy2.robjects import pandas2ri
 from scipy import interpolate
-# from q2_pepsirf.format_types import (
-#     PepsirfContingencyTSVFormat, PepsirfInfoSNPNFormat
-# )
 
 
 def generate_metadata(replicates):
@@ -38,11 +37,9 @@ def make_psea_table(
         max_size=2000,
         permutation_num=0,  # TODO: check if our user would be required to pass
         threads=4,
+        r_ctrl=False,
         pepsirf_binary="pepsirf"
 ):
-    # norm = ctx.get_action("pepsirf", "norm")
-    # zenrich = ctx.get_action("ps-plot", "zenrich")
-
     # collect zscores -> is there a better place to do this?
     scores = pd.read_csv(scores_file, sep="\t", index_col=0)
     # collect pairs
@@ -61,7 +58,8 @@ def make_psea_table(
     # run PSEA operation for current pair
     spline_tup = max_delta_by_spline(
         processed_scores,
-        ["070060_D360.Pro_PV2T", "070060_D540.Pro_PV2T"]
+        ["070060_D360.Pro_PV2T", "070060_D540.Pro_PV2T"],
+        r_ctrl
     )
     maxZ = spline_tup[0]
     deltaZ = spline_tup[1]
@@ -80,45 +78,12 @@ def make_psea_table(
         threads=threads,
         outdir="table_outdir"
     )
-    table.to_csv("psea_table.tsv", sep="\t", index=False)
-
-    # import score data as artifacts
-    # scores_artifact = ctx.make_artifact(
-    #     type="FeatureTable[Zscore]",
-    #     view=scores_file,
-    #     view_type=PepsirfContingencyTSVFormat
-    # )
-    # processed_artifact = ctx.make_artifact(
-    #     type="FeatureTable[RawCounts]",
-    #     view="processed_scores.tsv",
-    #     view_type=PepsirfContingencyTSVFormat
-    # )
-    # TODO: ensure formatting does not cause some unforeseen problem
-    # highlight_probes = ctx.make_artifact(
-    #     type="InfoSNPN",
-    #     view="lead_genes.tsv",
-    #     view_type=PepsirfInfoSNPNFormat
-    # )
-
-    # generate zenrich plot
-    # col_sum, = norm(
-    #     peptide_scores=processed_artifact,
-    #     normalize_approach="col_sum",  # TODO: check if user should decide
-    #     pepsirf_binary=pepsirf_binary
-    # )
-    # col_sum.view(PepsirfContingencyTSVFormat).save("norm_processed_scores.tsv")
-    # zenrich_plot = zenrich(
-    #     data=col_sum,
-    #     zscores=scores_artifact,
-    #     source=generate_metadata([rep for pair in pairs for rep in pair]),
-    #     highlight_probes=highlight_probes,
-    #     negative_controls=None
-    # )
+    table.to_csv("table.tsv", sep="\t", index=False)
 
     return qiime2.sdk.Result
 
 
-def max_delta_by_spline(data, timepoints) -> tuple:
+def max_delta_by_spline(data, timepoints, r_ctrl) -> tuple:
     """Finds the maximum value between two samples, and calculates the
     difference in Z score for each peptide
 
@@ -136,23 +101,40 @@ def max_delta_by_spline(data, timepoints) -> tuple:
         Contains maximum Z score, the difference (delta) in actual from
         predicted Z scores, the spline values for x and y
     """
-    maxZ = np.apply_over_axes(np.max, data.loc[:, timepoints], 1)
+    if r_ctrl:
+        rapply = ro.r["apply"]
+        rspline = ro.r["smooth.spline"]
+        rpredict = ro.r["predict"]
 
-    # perform smoothing spline prediction
-    y = data.loc[:, timepoints[0]].to_numpy()
-    x = data.loc[:, timepoints[1]].to_numpy()
-    # tentative magic number 5 knots came from tutorial linked above
-    smooth_spline = spline(5, y)
-    deltaZ = y - smooth_spline(x)
+        data_dict = {
+            timepoints[0]:
+                ro.FloatVector(data.loc[:, timepoints[0]].to_list()),
+            timepoints[1]:
+                ro.FloatVector(data.loc[:, timepoints[1]].to_list()),
+        }
+        rdata = ro.DataFrame(data_dict)
+        rdata.rownames = data.index.to_list()
+        print(f"Data as R DataFrame:\n{rdata}")
+        # maxZ = rapply(r_from_pd_data, 1, max)
+    else:
+        maxZ = np.apply_over_axes(np.max, data.loc[:, timepoints], 1)
 
-    # convert maxZ and deltaZ to pandas Series - allows for association of
-    # values with peptides
-    maxZ = pd.Series(
-        data=[num for elem in maxZ for num in elem],
-        index=data.index
-    )
-    deltaZ = pd.Series(data=deltaZ, index=data.index)
+        # perform smoothing spline prediction
+        y = data.loc[:, timepoints[0]].to_numpy()
+        x = data.loc[:, timepoints[1]].to_numpy()
+        # tentative magic number 5 knots came from tutorial linked above
+        smooth_spline = spline(5, y)
+        deltaZ = y - smooth_spline(x)
 
+        # convert maxZ and deltaZ to pandas Series - allows for association of
+        # values with peptides
+        maxZ = pd.Series(
+            data=[num for elem in maxZ for num in elem],
+            index=data.index
+        )
+        deltaZ = pd.Series(data=deltaZ, index=data.index)
+
+    print("Return from max_delta_by_spline...")
     return (maxZ, deltaZ, smooth_spline(x), smooth_spline(y))
 
 

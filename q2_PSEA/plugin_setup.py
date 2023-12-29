@@ -4,14 +4,14 @@ import q2_PSEA
 
 from q2_PSEA.actions.psea import make_psea_table
 from qiime2.plugin import (
-    Float, Int, Plugin, Str, Visualization
+    Bool, Float, Int, Plugin, Str, Visualization
 )
 
 # q2-PSEA plugin object
 plugin = Plugin(
     "psea", version=q2_PSEA.__version__,
     website="https://github.com/LadnerLab/q2-PSEA.git",
-    description="Qiime2 Plugin for PSEA." # TODO: get a description
+    description="Qiime2 Plugin for PSEA."  # TODO: get a description
 )
 
 
@@ -31,6 +31,7 @@ plugin.pipelines.register_function(
         "max_size": Int,
         "permutation_num": Int,
         "threads": Int,
+        "r_ctrl": Bool,
         "pepsirf_binary": Str
     },
     parameter_descriptions={
@@ -51,6 +52,8 @@ plugin.pipelines.register_function(
         "permutation_num": "Number of permutations. Minimal possible nominal"
             " p-value is about 1/perm.",
         "threads": "Number of threads with which to run ssGSEA operation.",
+        "r_ctrl": "Specifies to run PSEA using Python or R functions. If set to"
+            " True, then R functions will be used.",
         "pepsirf_binary": "Path to pepsirf binary."
     },
     outputs=[("zenrich_plot", Visualization)],
