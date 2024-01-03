@@ -6,7 +6,11 @@ import qiime2
 
 from math import pow, log
 from rpy2.robjects import pandas2ri
+from rpy2.robjects.conversion import localconverter
 from scipy import interpolate
+
+
+pandas2ri.activate()
 
 
 def generate_metadata(replicates):
@@ -66,19 +70,30 @@ def make_psea_table(
     # spline_x = spline_tup[2]
     # spline_y = spline_tup[3]
 
-    table = psea(
-        maxZ=maxZ,
-        deltaZ=deltaZ,
-        peptide_sets_file=peptide_sets_file,
-        species_tax_file=species_tax_file,
-        threshold=threshold,
-        min_size=min_size,
-        max_size=max_size,
-        permutation_num=permutation_num,
-        threads=threads,
-        outdir="table_outdir"
-    )
-    table.to_csv("table.tsv", sep="\t", index=False)
+    # check user wants to use R for analysis
+    if r_ctrl:
+        ro.r["source"]("psea.R")
+        rpsea = ro.globalenv["psea"]
+        rmaxZ = pandas2ri.py2rpy(maxZ)
+        rdeltaZ = pandas2ri.py2rpy(deltaZ)
+
+        table = rpsea(rmaxZ, rdeltaZ, threshold, peptide_sets_file)
+        print(f"Rpsea table:{table}")
+    # otherwise, assume user wants to use Python
+    else:
+        table = psea(
+            maxZ=maxZ,
+            deltaZ=deltaZ,
+            peptide_sets_file=peptide_sets_file,
+            species_tax_file=species_tax_file,
+            threshold=threshold,
+            min_size=min_size,
+            max_size=max_size,
+            permutation_num=permutation_num,
+            threads=threads,
+            outdir="table_outdir"
+        )
+        table.to_csv("table.tsv", sep="\t", index=False)
 
     return qiime2.sdk.Result
 
@@ -102,20 +117,21 @@ def max_delta_by_spline(data, timepoints, r_ctrl) -> tuple:
         predicted Z scores, the spline values for x and y
     """
     if r_ctrl:
-        rapply = ro.r["apply"]
-        rspline = ro.r["smooth.spline"]
-        rpredict = ro.r["predict"]
+        # followed this tutorial to write this code: https://medium.com/analytics-vidhya/calling-r-from-python-magic-of-rpy2-d8cbbf991571
+        ro.r["source"]("max_z.R")
+        ro.r["source"]("delta_by_spline.R")
+        max_z = ro.globalenv["max_z"]
+        delta_by_spline = ro.globalenv["delta_by_spline"]
 
-        data_dict = {
-            timepoints[0]:
-                ro.FloatVector(data.loc[:, timepoints[0]].to_list()),
-            timepoints[1]:
-                ro.FloatVector(data.loc[:, timepoints[1]].to_list()),
-        }
-        rdata = ro.DataFrame(data_dict)
-        rdata.rownames = data.index.to_list()
-        print(f"Data as R DataFrame:\n{rdata}")
-        # maxZ = rapply(r_from_pd_data, 1, max)
+        rdata = pandas2ri.py2rpy(data)
+        rmaxZ = max_z(rdata, timepoints[0], timepoints[1])
+        rdeltaZ = delta_by_spline(rdata, timepoints[0], timepoints[1])
+
+        maxZ = pd.Series(data=rmaxZ, index=data.index.to_list())
+        deltaZ = pd.Series(data=rdeltaZ, index=data.index.to_list())
+        maxZ.to_csv("maxZ.tsv", sep="\t")
+        deltaZ.to_csv("deltaZ.tsv", sep="\t")
+        return (maxZ, deltaZ)
     else:
         maxZ = np.apply_over_axes(np.max, data.loc[:, timepoints], 1)
 
@@ -133,9 +149,7 @@ def max_delta_by_spline(data, timepoints, r_ctrl) -> tuple:
             index=data.index
         )
         deltaZ = pd.Series(data=deltaZ, index=data.index)
-
-    print("Return from max_delta_by_spline...")
-    return (maxZ, deltaZ, smooth_spline(x), smooth_spline(y))
+        return (maxZ, deltaZ, smooth_spline(x), smooth_spline(y))
 
 
 def psea(
