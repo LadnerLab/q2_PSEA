@@ -6,8 +6,8 @@ import qiime2
 
 from math import pow, log
 from rpy2.robjects import pandas2ri
-from rpy2.robjects.conversion import localconverter
 from scipy import interpolate
+from q2_PSEA.utils import remove_peptides
 
 
 pandas2ri.activate()
@@ -55,8 +55,11 @@ def make_psea_table(
     # collect timepoints
     # with open(timepoints_file, "r") as fh:
     #     timepoints = fh.readlines()[0].strip().split()
-    # process scores
-    processed_scores = process_scores(scores, pairs, peptide_sets_file)
+    processed_scores = process_scores(scores, pairs)
+    processed_scores = remove_peptides(
+        processed_scores, peptide_sets_file, r_ctrl
+    )
+    processed_scores.to_csv("proc_scores.tsv", sep="\t")
 
     # TODO: reimplement loop to cover all defined pairs
     # run PSEA operation for current pair
@@ -70,34 +73,24 @@ def make_psea_table(
     # spline_x = spline_tup[2]
     # spline_y = spline_tup[3]
 
-    # check user wants to use R for analysis
-    if r_ctrl:
-        ro.r["source"]("psea.R")
-        rpsea = ro.globalenv["psea"]
-        rmaxZ = pandas2ri.py2rpy(maxZ)
-        rdeltaZ = pandas2ri.py2rpy(deltaZ)
-
-        table = rpsea(rmaxZ, rdeltaZ, threshold, peptide_sets_file)
-        print(f"Rpsea table:{table}")
-    # otherwise, assume user wants to use Python
-    else:
-        table = psea(
-            maxZ=maxZ,
-            deltaZ=deltaZ,
-            peptide_sets_file=peptide_sets_file,
-            species_tax_file=species_tax_file,
-            threshold=threshold,
-            min_size=min_size,
-            max_size=max_size,
-            permutation_num=permutation_num,
-            threads=threads,
-            outdir="table_outdir"
-        )
-        table.to_csv("table.tsv", sep="\t", index=False)
+    table = psea(
+        maxZ=maxZ,
+        deltaZ=deltaZ,
+        peptide_sets_file=peptide_sets_file,
+        species_tax_file=species_tax_file,
+        threshold=threshold,
+        min_size=min_size,
+        max_size=max_size,
+        permutation_num=permutation_num,
+        threads=threads,
+        outdir="table_outdir"
+    )
+    table.to_csv("table.tsv", sep="\t", index=False)
 
     return qiime2.sdk.Result
 
 
+# TODO: consider a helper function for deligation between running R or Python
 def max_delta_by_spline(data, timepoints, r_ctrl) -> tuple:
     """Finds the maximum value between two samples, and calculates the
     difference in Z score for each peptide
@@ -117,20 +110,19 @@ def max_delta_by_spline(data, timepoints, r_ctrl) -> tuple:
         predicted Z scores, the spline values for x and y
     """
     if r_ctrl:
-        # followed this tutorial to write this code: https://medium.com/analytics-vidhya/calling-r-from-python-magic-of-rpy2-d8cbbf991571
-        ro.r["source"]("max_z.R")
         ro.r["source"]("delta_by_spline.R")
-        max_z = ro.globalenv["max_z"]
-        delta_by_spline = ro.globalenv["delta_by_spline"]
+        rapply = ro.r["apply"]
+        rdelta_spline = ro.r["delta_by_spline"]
 
-        rdata = pandas2ri.py2rpy(data)
-        rmaxZ = max_z(rdata, timepoints[0], timepoints[1])
-        rdeltaZ = delta_by_spline(rdata, timepoints[0], timepoints[1])
-
-        maxZ = pd.Series(data=rmaxZ, index=data.index.to_list())
-        deltaZ = pd.Series(data=rdeltaZ, index=data.index.to_list())
-        maxZ.to_csv("maxZ.tsv", sep="\t")
-        deltaZ.to_csv("deltaZ.tsv", sep="\t")
+        with (ro.default_converter + pandas2ri.converter).context():
+            maxZ = rapply(data.loc[:, timepoints], 1, "max")
+            deltaZ = rdelta_spline(
+                data.loc[:, timepoints[0]], data.loc[:, timepoints[1]]
+            )
+        maxZ = pd.Series(data=maxZ, index=data.index.to_list())
+        deltaZ = pd.Series(data=deltaZ, index=data.index.to_list())
+        maxZ.to_csv("rmaxZ.tsv", sep="\t")
+        deltaZ.to_csv("rdeltaZ.tsv", sep="\t")
         return (maxZ, deltaZ)
     else:
         maxZ = np.apply_over_axes(np.max, data.loc[:, timepoints], 1)
@@ -262,7 +254,7 @@ def psea(
 
 # TODO: maybe this is the best place to also load zscores to reduce memory
 # usage
-def process_scores(scores, pairs, peptide_sets_file) -> pd.DataFrame:
+def process_scores(scores, pairs) -> pd.DataFrame:
     """Grabs replicates specified `pairs` from scores matrix and processes
     those remaining scores
 
@@ -285,20 +277,6 @@ def process_scores(scores, pairs, peptide_sets_file) -> pd.DataFrame:
         lambda row: row.apply(lambda val: 1 if val < 1 else val),
         axis=0
     )
-    # remove peptides not present in peptide set file
-    pep_list = []
-    # TODO: maybe I can pull this info out and pass to ssgsea instead of the
-    # file name
-    with open(peptide_sets_file, "r") as fh:
-        lines = [line.replace("\n", "").split("\t") for line in fh.readlines()]
-        # remove tax IDs
-        for line in lines:
-            line.pop(0)
-            for pep in line:
-                pep_list.append(pep)
-    # remove unspecified peptides from processed score matrix
-    pep_list = processed_scores.index.difference(pep_list)
-    processed_scores = processed_scores.drop(index=pep_list)
     return processed_scores.apply(
         lambda row: row.apply(lambda val: log(val, base) - offset)
     )
