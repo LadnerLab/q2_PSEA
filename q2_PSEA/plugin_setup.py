@@ -40,11 +40,15 @@ plugin.pipelines.register_function(
             " referencing the time a sample was taken.",
         "pairs_file": "Name of tab-delimited file containing pairs of"
             " sample names.",
-        "peptide_sets_file": "Name of GMT formatted file containing"
-            " information about species and their peptides.",
+        "peptide_sets_file": "Name of file containing information about"
+            " species and their peptides. If `r_ctrl` is False, the file"
+            " should be in GMT format; otherwise, the format should be CSV."
+            " Please refer to 'input.gmt' and 'input.csv' files in the"
+            " 'examples' directory for example files.",
         "species_tax_file": "Name of tab-delimited file containing species"
             " name and taxanomy ID associations.",
-        "threshold" : "",
+        "threshold": "Minimum Z score a peptide must maintain to be"
+            " considered in Gene Set Enrichment Analysis.",
         "min_size": "Minimum allowed number of peptides from peptide set also"
             " the data set.",
         "max_size": "Maximum allowed number of peptides from peptide set also"
