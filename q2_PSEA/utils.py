@@ -5,14 +5,13 @@ def remove_peptides(scores, peptide_sets_file, r_ctrl) -> pd.DataFrame:
     """Removes peptides not present in peptide sets file from a matrix of
     Zscores - this is a helper function to control the process based on the
     user's choice to use Python or R for their analysis
-        
+
     Returns
     -------
     pd.DataFrame
         Contains remaining peptides which were found in the peptide sets file
     """
     if r_ctrl:
-        print(f"Removing peptides not found in {peptide_sets_file}...")
         return remove_peptides_in_csv_format(scores, peptide_sets_file)
     else:
         return remove_peptides_in_gmt_format(scores, peptide_sets_file)
@@ -55,6 +54,5 @@ def remove_peptides_in_csv_format(scores, peptide_sets_file) -> pd.DataFrame:
         lines.pop(0)
         for line in lines:
             pep_list.append(line[0])
-    print(f"Peptides to keep:\n{pep_list}")
     pep_list = scores.index.difference(pep_list)
     return scores.drop(index=pep_list)

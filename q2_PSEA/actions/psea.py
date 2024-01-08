@@ -31,6 +31,7 @@ def generate_metadata(replicates):
     return qiime2.metadata.CategoricalMetadataColumn(meta_series)
 
 
+# TODO: figure out how to handle colliding GSEA parameters
 def make_psea_table(
         ctx,
         scores_file,
@@ -59,6 +60,7 @@ def make_psea_table(
         timepoints = fh.readlines()[0].strip().split()
 
     processed_scores = process_scores(scores, pairs)
+    # check the user wants to process using R
     if r_ctrl:
         ro.r["source"]("psea.R")
         rpsea = ro.globalenv["psea"]
@@ -79,13 +81,17 @@ def make_psea_table(
         rtable = rpsea(
             maxZ,
             deltaZ,
-            threshold,
             peptide_sets_file,
-            species_tax_file
+            species_tax_file,
+            threshold,
+            permutation_num,
+            min_size,
+            max_size
         )
         with (ro.default_converter + pandas2ri.converter).context():
             rtable = ro.conversion.get_conversion().rpy2py(rtable)
         rtable.to_csv("rtable.tsv", sep="\t", index=False)
+    # otherwise, assume user wants to use Python
     else:
         processed_scores = remove_peptides_in_gmt_format(
             processed_scores, peptide_sets_file
@@ -93,7 +99,7 @@ def make_psea_table(
 
         # TODO: reimplement loop to cover all defined pairs
         # run PSEA operation for current pair
-        spline_tup = max_delta_by_spline(
+        spline_tup = py_max_delta_by_spline(
             processed_scores,
             ["070060_D360.Pro_PV2T", "070060_D540.Pro_PV2T"]
         )
@@ -117,8 +123,7 @@ def make_psea_table(
     return qiime2.sdk.Result
 
 
-# TODO: consider a helper function for deligation between running R or Python
-def max_delta_by_spline(data, timepoints) -> tuple:
+def py_max_delta_by_spline(data, timepoints) -> tuple:
     """Finds the maximum value between two samples, and calculates the
     difference in Z score for each peptide
 
@@ -311,7 +316,7 @@ def process_scores(scores, pairs) -> pd.DataFrame:
     reps_list = list(np.unique(reps_list))
     # exclude unused replicates
     processed_scores = scores.loc[:, reps_list]
-    # process scores
+
     processed_scores = processed_scores.apply(lambda row: power + row, axis=0)
     processed_scores = processed_scores.apply(
         lambda row: row.apply(lambda val: 1 if val < 1 else val),

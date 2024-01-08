@@ -5,6 +5,7 @@ delta_by_spline <- function(timepoint1, timepoint2)
 
     names(deltaZ) <- rownames(deltaZ)
 
-    # return(list(maxZ,deltaZ,SS$x,SS$y))
+    # uncomment if smooth spline values needed in future
+    # return(list(deltaZ, SS$x, SS$y))
     return(deltaZ)
 }
