@@ -247,11 +247,14 @@ def psea(
     res = gp.ssgsea(
         data=peptide_list,
         gene_sets=peptide_sets_file,
+        sample_norm_method="custom",
+        correl_norm_type="rank",
         outdir=outdir,
         min_size=min_size,
         max_size=max_size,
         permutation_num=permutation_num,  # TODO: keep in mind this is here
-        # weight=threshold,  # TODO: verify equivocation
+        # weight_score_type=1, # for earlier versions
+        weight=1,
         threads=threads
     )
 
