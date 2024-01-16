@@ -10,6 +10,7 @@ from scipy import interpolate
 from q2_PSEA.utils import (
     remove_peptides_in_csv_format, remove_peptides_in_gmt_format
 )
+from q2_PSEA.actions.r_functions import INTERNAL
 
 
 pandas2ri.activate()
@@ -62,9 +63,6 @@ def make_psea_table(
     processed_scores = process_scores(scores, pairs)
     # check the user wants to process using R
     if r_ctrl:
-        ro.r["source"]("psea.R")
-        rpsea = ro.globalenv["psea"]
-
         processed_scores = remove_peptides_in_csv_format(
             processed_scores, peptide_sets_file
         )
@@ -77,8 +75,7 @@ def make_psea_table(
         maxZ = spline_tup[0]
         deltaZ = spline_tup[1]
 
-        # TODO: expand parameters
-        rtable = rpsea(
+        rtable = INTERNAL.psea(
             maxZ,
             deltaZ,
             peptide_sets_file,
@@ -175,13 +172,11 @@ def r_max_delta_by_spline(data, timepoints) -> tuple:
         Contains maximum Z score and the difference (delta) in actual from
         predicted Z scores
     """
-    ro.r["source"]("delta_by_spline.R")
     rapply = ro.r["apply"]
-    rdelta_spline = ro.r["delta_by_spline"]
 
     with (ro.default_converter + pandas2ri.converter).context():
         maxZ = rapply(data.loc[:, timepoints], 1, "max")
-        deltaZ = rdelta_spline(
+        deltaZ = INTERNAL.delta_by_spline(
             data.loc[:, timepoints[0]], data.loc[:, timepoints[1]]
         )
     maxZ = pd.Series(data=maxZ, index=data.index.to_list())
