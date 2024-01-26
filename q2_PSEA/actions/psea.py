@@ -50,19 +50,18 @@ def make_psea_table(
         threads=4,
         pepsirf_binary="pepsirf"
 ):
-    # collect zscores -> is there a better place to do this?
-    scores = pd.read_csv(scores_file, sep="\t", index_col=0)
-    # collect pairs
+    zenrich = ctx.get_action("ps-plot", "zenrich")
+
     with open(pairs_file, "r") as fh:
         pairs = [
             tuple(line.replace("\n", "").split("\t"))
             for line in fh.readlines()
         ]
-    # collect timepoints
     with open(timepoints_file, "r") as fh:
         timepoints = fh.readlines()[0].strip().split()
-
+    scores = pd.read_csv(scores_file, sep="\t", index_col=0)
     processed_scores = process_scores(scores, pairs)
+
     # check the user wants to process using R
     if r_ctrl:
         if out_table_name == "":
@@ -92,6 +91,7 @@ def make_psea_table(
         )
         with (ro.default_converter + pandas2ri.converter).context():
             rtable = ro.conversion.get_conversion().rpy2py(rtable)
+        # TODO: make consistent the column names from both R and Py
         rtable.to_csv(out_table_name, sep="\t", index=False)
     # otherwise, assume user wants to use Python
     else:
@@ -130,7 +130,13 @@ def make_psea_table(
         # )
         # table.to_csv(out_table_name, sep="\t", index=False)
 
-    return qiime2.sdk.Result
+    zenrich_plot, = zenrich(
+        data=processed_scores,
+        zscores=,
+        pepsirf_binary=pepsirf_binary
+    )
+
+    return zenrich_plot
 
 
 def py_max_delta_by_spline(data, timepoints) -> tuple:
