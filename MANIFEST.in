@@ -1,2 +1,2 @@
 include versioneer.py
-include q2_long_gsea/_version.py
+include q2_PSEA/_version.py

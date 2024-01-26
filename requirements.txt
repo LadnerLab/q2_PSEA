@@ -1,0 +1,5 @@
+# Python analysis requirements
+gseapy
+
+# R analysis requirements
+rpy2
