@@ -2,10 +2,12 @@
 
 import q2_PSEA
 
+
 from q2_PSEA.actions.psea import make_psea_table
 from qiime2.plugin import (
     Bool, Float, Int, Plugin, Str, Visualization
 )
+
 
 # q2-PSEA plugin object
 plugin = Plugin(
@@ -30,8 +32,9 @@ plugin.pipelines.register_function(
         "min_size": Int,
         "max_size": Int,
         "permutation_num": Int,
-        "threads": Int,
+        "out_table_name": Str,
         "r_ctrl": Bool,
+        "threads": Int,
         "pepsirf_binary": Str
     },
     parameter_descriptions={
@@ -55,16 +58,18 @@ plugin.pipelines.register_function(
             " the data set.",
         "permutation_num": "Number of permutations. Minimal possible nominal"
             " p-value is about 1/perm.",
+        "out_table_name": "Name given to the resulting GSEA result.",
+        "r_ctrl": "Specifies to run PSEA using Python or R functions. If set"
+            " to True, then R functions will be used.",
         "threads": "Number of threads with which to run ssGSEA operation.",
-        "r_ctrl": "Specifies to run PSEA using Python or R functions. If set to"
-            " True, then R functions will be used.",
         "pepsirf_binary": "Path to pepsirf binary."
     },
+    # TODO: Semantic Type for GSEA result table?
     outputs=[("zenrich_plot", Visualization)],
     output_descriptions={
         "zenrich_plot": "Name of plot file visualization comparison between"
-            " two samples. This plot includes the smooth spline fit to the given"
-            " data and highlights the leading edge peptides for all"
+            " two samples. This plot includes the smooth spline fit to the"
+            " given data and highlights the leading edge peptides for all"
             " significant taxa."
     },
     name="Make PSEA Table",

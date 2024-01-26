@@ -43,9 +43,11 @@ def make_psea_table(
         species_tax_file=None,
         min_size=15,
         max_size=2000,
-        permutation_num=0,  # TODO: check if our user would be required to pass
+        permutation_num=10000,  # as per original PSEA code
+        out_table_name="",
+        # True by default since Python implementation is still being developed
+        r_ctrl=True,
         threads=4,
-        r_ctrl=False,
         pepsirf_binary="pepsirf"
 ):
     # collect zscores -> is there a better place to do this?
@@ -63,6 +65,9 @@ def make_psea_table(
     processed_scores = process_scores(scores, pairs)
     # check the user wants to process using R
     if r_ctrl:
+        if out_table_name == "":
+            out_table_name = "r_table.tsv"
+
         processed_scores = remove_peptides_in_csv_format(
             processed_scores, peptide_sets_file
         )
@@ -87,35 +92,43 @@ def make_psea_table(
         )
         with (ro.default_converter + pandas2ri.converter).context():
             rtable = ro.conversion.get_conversion().rpy2py(rtable)
-        rtable.to_csv("rtable.tsv", sep="\t", index=False)
+        rtable.to_csv(out_table_name, sep="\t", index=False)
     # otherwise, assume user wants to use Python
     else:
-        processed_scores = remove_peptides_in_gmt_format(
-            processed_scores, peptide_sets_file
+        print(
+            "The '--p-r-ctrl' parameter has been unset, please set the"
+            " parameter to 'True' as PSEA using Python is still being worked"
+            " on."
         )
+        # if out_table_name == "":
+        #     out_table_name = "py_table.tsv"
 
-        # TODO: reimplement loop to cover all defined pairs
-        # run PSEA operation for current pair
-        spline_tup = py_max_delta_by_spline(
-            processed_scores,
-            ["070060_D360.Pro_PV2T", "070060_D540.Pro_PV2T"]
-        )
-        maxZ = spline_tup[0]
-        deltaZ = spline_tup[1]
+        # processed_scores = remove_peptides_in_gmt_format(
+        #     processed_scores, peptide_sets_file
+        # )
 
-        table = psea(
-            maxZ=maxZ,
-            deltaZ=deltaZ,
-            peptide_sets_file=peptide_sets_file,
-            species_tax_file=species_tax_file,
-            threshold=threshold,
-            min_size=min_size,
-            max_size=max_size,
-            permutation_num=permutation_num,
-            threads=threads,
-            outdir="table_outdir"
-        )
-        table.to_csv("table.tsv", sep="\t", index=False)
+        # # TODO: reimplement loop to cover all defined pairs
+        # # run PSEA operation for current pair
+        # spline_tup = py_max_delta_by_spline(
+        #     processed_scores,
+        #     ["070060_D360.Pro_PV2T", "070060_D540.Pro_PV2T"]
+        # )
+        # maxZ = spline_tup[0]
+        # deltaZ = spline_tup[1]
+
+        # table = psea(
+        #     maxZ=maxZ,
+        #     deltaZ=deltaZ,
+        #     peptide_sets_file=peptide_sets_file,
+        #     species_tax_file=species_tax_file,
+        #     threshold=threshold,
+        #     min_size=min_size,
+        #     max_size=max_size,
+        #     permutation_num=permutation_num,
+        #     threads=threads,
+        #     outdir="table_outdir"
+        # )
+        # table.to_csv(out_table_name, sep="\t", index=False)
 
     return qiime2.sdk.Result
 
