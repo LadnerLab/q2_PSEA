@@ -1,6 +1,14 @@
 import pandas as pd
 
 
+def save_hprobes(table, species_name) -> str:
+    probes = table.loc[species_name, "all_tested_peptides"]
+    with open(f"hprobes_{species_name}.tsv", "w") as fh:
+        fh.write(probes.replace("\\", "\n"))
+
+    return f"hprobes_{species_name}.tsv"
+
+
 def remove_peptides(scores, peptide_sets_file, r_ctrl) -> pd.DataFrame:
     """Removes peptides not present in peptide sets file from a matrix of
     Zscores - this is a helper function to control the process based on the

@@ -7,8 +7,11 @@ import qiime2
 from math import pow, log
 from rpy2.robjects import pandas2ri
 from scipy import interpolate
+from q2_pepsirf.format_types import (
+    PepsirfContingencyTSVFormat, PepsirfInfoSNPNFormat
+)
 from q2_PSEA.utils import (
-    remove_peptides_in_csv_format, remove_peptides_in_gmt_format
+    remove_peptides_in_csv_format, remove_peptides_in_gmt_format, save_hprobes
 )
 from q2_PSEA.actions.r_functions import INTERNAL
 
@@ -60,7 +63,10 @@ def make_psea_table(
     with open(timepoints_file, "r") as fh:
         timepoints = fh.readlines()[0].strip().split()
     scores = pd.read_csv(scores_file, sep="\t", index_col=0)
+    # TODO: store in a temp dir and remove temp before exiting, or would this
+    # be helpful to the user?
     processed_scores = process_scores(scores, pairs)
+    processed_scores.to_csv("proc_scores.tsv", sep="\t")
 
     # check the user wants to process using R
     if r_ctrl:
@@ -72,14 +78,16 @@ def make_psea_table(
         )
 
         # TODO: also implement loop here
+        pair = ["070060_D360.Pro_PV2T", "070060_D540.Pro_PV2T"]
         spline_tup = r_max_delta_by_spline(
             processed_scores,
-            ["070060_D360.Pro_PV2T", "070060_D540.Pro_PV2T"]
+            pair
         )
         maxZ = spline_tup[0]
         deltaZ = spline_tup[1]
+        spline = spline_tup[2]
 
-        rtable = INTERNAL.psea(
+        table = INTERNAL.psea(
             maxZ,
             deltaZ,
             peptide_sets_file,
@@ -90,9 +98,9 @@ def make_psea_table(
             max_size
         )
         with (ro.default_converter + pandas2ri.converter).context():
-            rtable = ro.conversion.get_conversion().rpy2py(rtable)
+            table = ro.conversion.get_conversion().rpy2py(table)
         # TODO: make consistent the column names from both R and Py
-        rtable.to_csv(out_table_name, sep="\t", index=False)
+        table.to_csv(out_table_name, sep="\t", index=False)
     # otherwise, assume user wants to use Python
     else:
         print(
@@ -130,9 +138,41 @@ def make_psea_table(
         # )
         # table.to_csv(out_table_name, sep="\t", index=False)
 
+    # TODO: maybe this should go in a function?
+    # TODO: should this be passed pairs for each iteration?
+    pair = ["070060_D360.Pro_PV2T", "070060_D540.Pro_PV2T"]
+    source = generate_metadata(processed_scores.columns.to_list())
+    proc_scores_art = ctx.make_artifact(
+        type="FeatureTable[Normed]",
+        view="proc_scores.tsv",
+        view_type=PepsirfContingencyTSVFormat
+    )
+    timepoints_file = f"{pair[0]}_{pair[1]}_scores.tsv"
+    scores.loc[:, pair].to_csv(timepoints_file, sep="\t")
+    scores_art = ctx.make_artifact(
+        type="FeatureTable[Zscore]",
+        view=timepoints_file,
+        view_type=PepsirfContingencyTSVFormat
+    )
+    # choosing a single species' tested peptides for highlighted probes
+    hprobes_file = save_hprobes(table, "72149")
+    hprobes_art = ctx.make_artifact(
+        type="InfoSNPN",
+        view=hprobes_file,
+        view_type=PepsirfInfoSNPNFormat
+    )
+
+    # TODO: implement loop for all species?
     zenrich_plot, = zenrich(
-        data=processed_scores,
-        zscores=,
+        data=proc_scores_art,
+        zscores=scores_art,
+        source=source,
+        spline_x=list(spline[0]),
+        spline_y=list(spline[1]),
+        highlight_probes=hprobes_art,
+        step_z_thresh=5,
+        upper_z_thresh=30,
+        lower_z_thresh=5,
         pepsirf_binary=pepsirf_binary
     )
 
@@ -192,15 +232,26 @@ def r_max_delta_by_spline(data, timepoints) -> tuple:
         predicted Z scores
     """
     rapply = ro.r["apply"]
+    rsmooth_spline = ro.r["smooth.spline"]
 
     with (ro.default_converter + pandas2ri.converter).context():
         maxZ = rapply(data.loc[:, timepoints], 1, "max")
+        # TODO: `spline` object ends of coming back as an OrdDict; when passed
+        # to another function, an error is thrown explaining that py2rpy is not
+        # defined for rpy2.rlike.containers.OrdDict; this must be revisted to
+        # fix having to do the spline operation twice
+        spline = rsmooth_spline(
+            data.loc[:, timepoints[0]], data.loc[:, timepoints[1]]
+        )
+        spline = dict(spline)
         deltaZ = INTERNAL.delta_by_spline(
             data.loc[:, timepoints[0]], data.loc[:, timepoints[1]]
         )
+
     maxZ = pd.Series(data=maxZ, index=data.index.to_list())
     deltaZ = pd.Series(data=deltaZ, index=data.index.to_list())
-    return (maxZ, deltaZ)
+
+    return (maxZ, deltaZ, [spline["x"], spline["y"]])
 
 
 def psea(
