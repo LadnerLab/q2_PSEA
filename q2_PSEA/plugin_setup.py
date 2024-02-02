@@ -33,6 +33,9 @@ plugin.pipelines.register_function(
         "max_size": Int,
         "permutation_num": Int,
         "out_table_name": Str,
+        "step_z_thresh": Int,
+        "upper_z_thresh": Int,
+        "lower_z_thresh": Int,
         "r_ctrl": Bool,
         "threads": Int,
         "pepsirf_binary": Str
@@ -59,6 +62,9 @@ plugin.pipelines.register_function(
         "permutation_num": "Number of permutations. Minimal possible nominal"
             " p-value is about 1/perm.",
         "out_table_name": "Name given to the resulting GSEA result.",
+        "step_z_thresh": "",
+        "upper_z_thresh": "",
+        "lower_z_thresh": "",
         "r_ctrl": "Specifies to run PSEA using Python or R functions. If set"
             " to True, then R functions will be used.",
         "threads": "Number of threads with which to run ssGSEA operation.",

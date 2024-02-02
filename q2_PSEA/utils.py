@@ -4,7 +4,7 @@ import pandas as pd
 def save_hprobes(table, species_name) -> str:
     probes = table.loc[species_name, "all_tested_peptides"]
     with open(f"hprobes_{species_name}.tsv", "w") as fh:
-        fh.write(probes.replace("\\", "\n"))
+        fh.write(probes.replace("/", "\n"))
 
     return f"hprobes_{species_name}.tsv"
 

@@ -48,6 +48,9 @@ def make_psea_table(
         max_size=2000,
         permutation_num=10000,  # as per original PSEA code
         out_table_name="",
+        step_z_thresh=5,
+        upper_z_thresh=30,
+        lower_z_thresh=5,
         # True by default since Python implementation is still being developed
         r_ctrl=True,
         threads=4,
@@ -63,8 +66,7 @@ def make_psea_table(
     with open(timepoints_file, "r") as fh:
         timepoints = fh.readlines()[0].strip().split()
     scores = pd.read_csv(scores_file, sep="\t", index_col=0)
-    # TODO: store in a temp dir and remove temp before exiting, or would this
-    # be helpful to the user?
+    # TODO: change to temp dir to do work
     processed_scores = process_scores(scores, pairs)
     processed_scores.to_csv("proc_scores.tsv", sep="\t")
 
@@ -142,16 +144,17 @@ def make_psea_table(
     # TODO: should this be passed pairs for each iteration?
     pair = ["070060_D360.Pro_PV2T", "070060_D540.Pro_PV2T"]
     source = generate_metadata(processed_scores.columns.to_list())
+
+    timepoints_scores = f"{pair[0]}_{pair[1]}_proc_scores.tsv"
+    processed_scores.loc[:, pair].to_csv(timepoints_scores, sep="\t")
     proc_scores_art = ctx.make_artifact(
-        type="FeatureTable[Normed]",
-        view="proc_scores.tsv",
+        type="FeatureTable[Zscore]",
+        view=timepoints_scores,
         view_type=PepsirfContingencyTSVFormat
     )
-    timepoints_file = f"{pair[0]}_{pair[1]}_scores.tsv"
-    scores.loc[:, pair].to_csv(timepoints_file, sep="\t")
     scores_art = ctx.make_artifact(
-        type="FeatureTable[Zscore]",
-        view=timepoints_file,
+        type="FeatureTable[Normed]",
+        view=scores_file,
         view_type=PepsirfContingencyTSVFormat
     )
     # choosing a single species' tested peptides for highlighted probes
@@ -164,15 +167,15 @@ def make_psea_table(
 
     # TODO: implement loop for all species?
     zenrich_plot, = zenrich(
-        data=proc_scores_art,
-        zscores=scores_art,
+        data=scores_art,
+        zscores=proc_scores_art,
         source=source,
         spline_x=list(spline[0]),
         spline_y=list(spline[1]),
         highlight_probes=hprobes_art,
-        step_z_thresh=5,
-        upper_z_thresh=30,
-        lower_z_thresh=5,
+        step_z_thresh=step_z_thresh,
+        upper_z_thresh=upper_z_thresh,
+        lower_z_thresh=lower_z_thresh,
         pepsirf_binary=pepsirf_binary
     )
 
