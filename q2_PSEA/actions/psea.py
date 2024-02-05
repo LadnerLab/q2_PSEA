@@ -158,7 +158,8 @@ def make_psea_table(
         view_type=PepsirfContingencyTSVFormat
     )
     # choosing a single species' tested peptides for highlighted probes
-    hprobes_file = save_hprobes(table, "72149")
+    species_id = "72149"
+    hprobes_file = save_hprobes(table, species_name)
     hprobes_art = ctx.make_artifact(
         type="InfoSNPN",
         view=hprobes_file,
