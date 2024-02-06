@@ -56,6 +56,8 @@ def make_psea_table(
         threads=4,
         pepsirf_binary="pepsirf"
 ):
+    # TODO: change into temp directory
+    volcano = ctx.get_action("ps-plot", "volcano")
     zenrich = ctx.get_action("ps-plot", "zenrich")
 
     with open(pairs_file, "r") as fh:
@@ -87,7 +89,8 @@ def make_psea_table(
         )
         maxZ = spline_tup[0]
         deltaZ = spline_tup[1]
-        spline = spline_tup[2]
+        spline_x = spline_tup[2]["x"]
+        spline_y = spline_tup[2]["y"]
 
         table = INTERNAL.psea(
             maxZ,
@@ -142,6 +145,8 @@ def make_psea_table(
 
     # TODO: maybe this should go in a function?
     # TODO: should this be passed pairs for each iteration?
+    pd.Series(data=spline_x).to_csv("spline_x.tsv", sep="\t")
+    pd.Series(data=spline_y).to_csv("spline_y.tsv", sep="\t")
     pair = ["070060_D360.Pro_PV2T", "070060_D540.Pro_PV2T"]
     source = generate_metadata(processed_scores.columns.to_list())
 
@@ -159,7 +164,7 @@ def make_psea_table(
     )
     # choosing a single species' tested peptides for highlighted probes
     species_id = "72149"
-    hprobes_file = save_hprobes(table, species_name)
+    hprobes_file = save_hprobes(table, species_id)
     hprobes_art = ctx.make_artifact(
         type="InfoSNPN",
         view=hprobes_file,
@@ -167,12 +172,12 @@ def make_psea_table(
     )
 
     # TODO: implement loop for all species?
-    zenrich_plot, = zenrich(
+    scatter_plot, = zenrich(
         data=scores_art,
         zscores=proc_scores_art,
         source=source,
-        spline_x=list(spline[0]),
-        spline_y=list(spline[1]),
+        spline_x_filepath="spline_x.tsv",
+        spline_y_filepath="spline_y.tsv",
         highlight_probes=hprobes_art,
         step_z_thresh=step_z_thresh,
         upper_z_thresh=upper_z_thresh,
@@ -180,7 +185,15 @@ def make_psea_table(
         pepsirf_binary=pepsirf_binary
     )
 
-    return zenrich_plot
+    p_vals = table.loc[:, "p.adjust"]
+    es = table.loc[:, "enrichmentScore"]
+
+    volcano_plot, = volcano(
+        p_vals=p_vals.to_list(),
+        es=es.to_list()
+    )
+
+    return scatter_plot, volcano_plot
 
 
 def py_max_delta_by_spline(data, timepoints) -> tuple:
@@ -255,7 +268,7 @@ def r_max_delta_by_spline(data, timepoints) -> tuple:
     maxZ = pd.Series(data=maxZ, index=data.index.to_list())
     deltaZ = pd.Series(data=deltaZ, index=data.index.to_list())
 
-    return (maxZ, deltaZ, [spline["x"], spline["y"]])
+    return (maxZ, deltaZ, spline)
 
 
 def psea(
