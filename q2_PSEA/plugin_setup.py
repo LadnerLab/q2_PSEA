@@ -29,6 +29,8 @@ plugin.pipelines.register_function(
         "peptide_sets_file": Str,
         "species_tax_file": Str,
         "threshold": Float,
+        "p_val_thresh": Float,
+        "es_thresh": Float,
         "min_size": Int,
         "max_size": Int,
         "permutation_num": Int,
@@ -55,6 +57,8 @@ plugin.pipelines.register_function(
             " name and taxanomy ID associations.",
         "threshold": "Minimum Z score a peptide must maintain to be"
             " considered in Gene Set Enrichment Analysis.",
+        "p_val_thresh": "",
+        "es_thresh": "",
         "min_size": "Minimum allowed number of peptides from peptide set also"
             " the data set.",
         "max_size": "Maximum allowed number of peptides from peptide set also"

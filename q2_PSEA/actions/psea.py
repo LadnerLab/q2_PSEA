@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd
 import rpy2.robjects as ro
 import qiime2
+import q2_PSEA.utils as utils
 
 from math import pow, log
 from rpy2.robjects import pandas2ri
@@ -10,29 +11,14 @@ from scipy import interpolate
 from q2_pepsirf.format_types import (
     PepsirfContingencyTSVFormat, PepsirfInfoSNPNFormat
 )
-from q2_PSEA.utils import (
-    remove_peptides_in_csv_format, remove_peptides_in_gmt_format, save_hprobes
-)
+# from q2_PSEA.utils import (
+#     generate_metadata, remove_peptides_in_csv_format,
+#     remove_peptides_in_gmt_format, save_taxa_leading_peps_file
+# )
 from q2_PSEA.actions.r_functions import INTERNAL
 
 
 pandas2ri.activate()
-
-
-def generate_metadata(replicates):
-    base_reps = []
-
-    replicates.sort()
-
-    for replicate in replicates:
-        base_seq_name = replicate.split("_")[2]
-        base_reps.append(base_seq_name)
-
-    meta_series = pd.Series(data=base_reps, index=replicates)
-    meta_series.index.name = "sample-id"
-    meta_series.name = "source"
-
-    return qiime2.metadata.CategoricalMetadataColumn(meta_series)
 
 
 # TODO: figure out how to handle colliding GSEA parameters
@@ -43,6 +29,8 @@ def make_psea_table(
         pairs_file,
         peptide_sets_file,
         threshold,  # TODO: ask for suggested default value
+        p_val_thresh,  # TODO: get suggestion for default value
+        es_thresh,  # TODO: get suggestion for default value
         species_tax_file=None,
         min_size=15,
         max_size=2000,
@@ -77,7 +65,7 @@ def make_psea_table(
         if out_table_name == "":
             out_table_name = "r_table.tsv"
 
-        processed_scores = remove_peptides_in_csv_format(
+        processed_scores = utils.remove_peptides_in_csv_format(
             processed_scores, peptide_sets_file
         )
 
@@ -148,7 +136,7 @@ def make_psea_table(
     pd.Series(data=spline_x).to_csv("spline_x.tsv", sep="\t")
     pd.Series(data=spline_y).to_csv("spline_y.tsv", sep="\t")
     pair = ["070060_D360.Pro_PV2T", "070060_D540.Pro_PV2T"]
-    source = generate_metadata(processed_scores.columns.to_list())
+    source = utils.generate_metadata(processed_scores.columns.to_list())
 
     timepoints_scores = f"{pair[0]}_{pair[1]}_proc_scores.tsv"
     processed_scores.loc[:, pair].to_csv(timepoints_scores, sep="\t")
@@ -162,13 +150,15 @@ def make_psea_table(
         view=scores_file,
         view_type=PepsirfContingencyTSVFormat
     )
-    # choosing a single species' tested peptides for highlighted probes
-    species_id = "72149"
-    hprobes_file = save_hprobes(table, species_id)
-    hprobes_art = ctx.make_artifact(
-        type="InfoSNPN",
-        view=hprobes_file,
-        view_type=PepsirfInfoSNPNFormat
+    # grab species names or IDs for leading edge highlights
+    if species_tax_file:
+        taxa = table.loc[:, "species_name"].to_list()
+    else:
+        taxa = table.loc[:, "ID"].to_list()
+    utils.save_taxa_leading_peps_file(
+        "taxa_peps.tsv",
+        taxa,
+        table.loc[:, "all_tested_peptides"].to_list()
     )
 
     # TODO: implement loop for all species?
@@ -178,19 +168,21 @@ def make_psea_table(
         source=source,
         spline_x_filepath="spline_x.tsv",
         spline_y_filepath="spline_y.tsv",
-        highlight_probes=hprobes_art,
+        taxa_peps_filepath="taxa_peps.tsv",
         step_z_thresh=step_z_thresh,
         upper_z_thresh=upper_z_thresh,
         lower_z_thresh=lower_z_thresh,
         pepsirf_binary=pepsirf_binary
     )
 
-    p_vals = table.loc[:, "p.adjust"]
-    es = table.loc[:, "enrichmentScore"]
-
+    p_vals = table.loc[:, "pvalue"].to_list()
+    es = table.loc[:, "enrichmentScore"].to_list()
     volcano_plot, = volcano(
-        p_vals=p_vals.to_list(),
-        es=es.to_list()
+        p_vals=p_vals,
+        es=es,
+        taxa=taxa,
+        p_val_thresh=p_val_thresh,
+        es_thresh=es_thresh
     )
 
     return scatter_plot, volcano_plot
