@@ -57,8 +57,11 @@ plugin.pipelines.register_function(
             " name and taxanomy ID associations.",
         "threshold": "Minimum Z score a peptide must maintain to be"
             " considered in Gene Set Enrichment Analysis.",
-        "p_val_thresh": "",
-        "es_thresh": "",
+        "p_val_thresh": "Specifies the value adjusted p-values must meet to be"
+            " considered for highlighting in volcano and scatter plots. If a"
+            " threshold is not provided, then the theshold is set to 0.05 / N"
+            " where N is the number of taxa being tested.",
+        "es_thresh": "Specifies the value ",
         "min_size": "Minimum allowed number of peptides from peptide set also"
             " the data set.",
         "max_size": "Maximum allowed number of peptides from peptide set also"

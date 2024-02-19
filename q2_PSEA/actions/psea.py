@@ -5,7 +5,7 @@ import rpy2.robjects as ro
 import qiime2
 import q2_PSEA.utils as utils
 
-from math import pow, log
+from math import isnan, log, pow
 from rpy2.robjects import pandas2ri
 from scipy import interpolate
 from q2_pepsirf.format_types import (
@@ -29,8 +29,8 @@ def make_psea_table(
         pairs_file,
         peptide_sets_file,
         threshold,  # TODO: ask for suggested default value
-        p_val_thresh,  # TODO: get suggestion for default value
-        es_thresh,  # TODO: get suggestion for default value
+        p_val_thresh = float("nan"),
+        es_thresh = 0.4,  # TODO: get suggestion for default value
         species_tax_file=None,
         min_size=15,
         max_size=2000,
@@ -77,8 +77,8 @@ def make_psea_table(
         )
         maxZ = spline_tup[0]
         deltaZ = spline_tup[1]
-        spline_x = spline_tup[2]["x"]
-        spline_y = spline_tup[2]["y"]
+        spline_x = list(spline_tup[2]["x"])
+        spline_y = list(spline_tup[2]["y"])
 
         table = INTERNAL.psea(
             maxZ,
@@ -133,6 +133,7 @@ def make_psea_table(
 
     # TODO: maybe this should go in a function?
     # TODO: should this be passed pairs for each iteration?
+    p_vals = table.loc[:, "p.adjust"].to_list()
     pd.Series(data=spline_x).to_csv("spline_x.tsv", sep="\t")
     pd.Series(data=spline_y).to_csv("spline_y.tsv", sep="\t")
     pair = ["070060_D360.Pro_PV2T", "070060_D540.Pro_PV2T"]
@@ -153,14 +154,15 @@ def make_psea_table(
     # grab species names or IDs for leading edge highlights
     if species_tax_file:
         taxa = table.loc[:, "species_name"].to_list()
+        taxa_peps_df = table.loc[:, ["species_name", "core_enrichment"]]
     else:
         taxa = table.loc[:, "ID"].to_list()
-    utils.save_taxa_leading_peps_file(
-        "taxa_peps.tsv",
-        taxa,
-        table.loc[:, "all_tested_peptides"].to_list()
-    )
+        taxa_peps_df = table.loc[:, ["ID", "core_enrichment"]]
+    taxa_peps_df.index.name = "sample-id"
 
+    if isnan(p_val_thresh):
+        p_val_thresh = 0.05 / len(taxa)
+    
     # TODO: implement loop for all species?
     scatter_plot, = zenrich(
         data=scores_art,
@@ -168,21 +170,26 @@ def make_psea_table(
         source=source,
         spline_x_filepath="spline_x.tsv",
         spline_y_filepath="spline_y.tsv",
-        taxa_peps_filepath="taxa_peps.tsv",
+        taxa_peps_md=qiime2.Metadata(taxa_peps_df),
+        p_val_thresh=p_val_thresh,
+        p_vals=p_vals,
         step_z_thresh=step_z_thresh,
         upper_z_thresh=upper_z_thresh,
         lower_z_thresh=lower_z_thresh,
         pepsirf_binary=pepsirf_binary
     )
 
-    p_vals = table.loc[:, "pvalue"].to_list()
-    es = table.loc[:, "enrichmentScore"].to_list()
+    # TODO: consider passing Metadata
+    es = table.loc[:, "NES"].to_list()
     volcano_plot, = volcano(
-        p_vals=p_vals,
-        es=es,
+        x=es,
+        y=p_vals,
         taxa=taxa,
-        p_val_thresh=p_val_thresh,
-        es_thresh=es_thresh
+        x_thresh=es_thresh,
+        y_thresh=p_val_thresh,
+        x_label="Enrichment score",
+        y_label="Adjusted p-values",
+        title="PSEA Volcano Plot"
     )
 
     return scatter_plot, volcano_plot
