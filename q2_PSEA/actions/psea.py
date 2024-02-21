@@ -46,7 +46,7 @@ def make_psea_table(
 ):
     # TODO: change into temp directory
     volcano = ctx.get_action("ps-plot", "volcano")
-    zenrich = ctx.get_action("ps-plot", "zenrich")
+    zscatter = ctx.get_action("ps-plot", "zscatter")
 
     with open(pairs_file, "r") as fh:
         pairs = [
@@ -133,11 +133,7 @@ def make_psea_table(
 
     # TODO: maybe this should go in a function?
     # TODO: should this be passed pairs for each iteration?
-    p_vals = table.loc[:, "p.adjust"].to_list()
-    pd.Series(data=spline_x).to_csv("spline_x.tsv", sep="\t")
-    pd.Series(data=spline_y).to_csv("spline_y.tsv", sep="\t")
     pair = ["070060_D360.Pro_PV2T", "070060_D540.Pro_PV2T"]
-    source = utils.generate_metadata(processed_scores.columns.to_list())
 
     timepoints_scores = f"{pair[0]}_{pair[1]}_proc_scores.tsv"
     processed_scores.loc[:, pair].to_csv(timepoints_scores, sep="\t")
@@ -154,32 +150,34 @@ def make_psea_table(
     # grab species names or IDs for leading edge highlights
     if species_tax_file:
         taxa = table.loc[:, "species_name"].to_list()
-        taxa_peps_df = table.loc[:, ["species_name", "core_enrichment"]]
+        highlight_df = table.loc[:, [
+            "p.adjust", "species_name", "core_enrichment"
+        ]]
     else:
         taxa = table.loc[:, "ID"].to_list()
-        taxa_peps_df = table.loc[:, ["ID", "core_enrichment"]]
-    taxa_peps_df.index.name = "sample-id"
+        highlight_df = table.loc[:, ["p.adjust", "ID", "core_enrichment"]]
+    highlight_df.index.name = "sample-id"
+
+    spline_df = pd.DataFrame({ "x": spline_x, "y": spline_y })
+    indexes = []
+    for i in range(len(spline_x)):
+        indexes.append(f"{i}")
+    spline_df.index = indexes
+    spline_df.index.name = "sample-id"
 
     if isnan(p_val_thresh):
         p_val_thresh = 0.05 / len(taxa)
     
     # TODO: implement loop for all species?
-    scatter_plot, = zenrich(
-        data=scores_art,
+    scatter_plot, = zscatter(
         zscores=proc_scores_art,
-        source=source,
-        spline_x_filepath="spline_x.tsv",
-        spline_y_filepath="spline_y.tsv",
-        taxa_peps_md=qiime2.Metadata(taxa_peps_df),
-        p_val_thresh=p_val_thresh,
-        p_vals=p_vals,
-        step_z_thresh=step_z_thresh,
-        upper_z_thresh=upper_z_thresh,
-        lower_z_thresh=lower_z_thresh,
-        pepsirf_binary=pepsirf_binary
+        spline_md=qiime2.Metadata(spline_df),
+        highlight_thresh=p_val_thresh,
+        highlight_md=qiime2.Metadata(highlight_df)
     )
 
     # TODO: consider passing Metadata
+    p_vals = table.loc[:, "p.adjust"].to_list()
     es = table.loc[:, "NES"].to_list()
     volcano_plot, = volcano(
         x=es,
@@ -188,8 +186,7 @@ def make_psea_table(
         x_thresh=es_thresh,
         y_thresh=p_val_thresh,
         x_label="Enrichment score",
-        y_label="Adjusted p-values",
-        title="PSEA Volcano Plot"
+        y_label="Adjusted p-values"
     )
 
     return scatter_plot, volcano_plot
