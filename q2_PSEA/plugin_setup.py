@@ -27,14 +27,13 @@ plugin.pipelines.register_function(
         "timepoints_file": Str,
         "pairs_file": Str,
         "peptide_sets_file": Str,
-        "species_tax_file": Str,
+        "species_taxa_file": Str,
         "threshold": Float,
         "p_val_thresh": Float,
         "es_thresh": Float,
         "min_size": Int,
         "max_size": Int,
         "permutation_num": Int,
-        "out_table_name": Str,
         "step_z_thresh": Int,
         "upper_z_thresh": Int,
         "lower_z_thresh": Int,
@@ -53,7 +52,7 @@ plugin.pipelines.register_function(
             " should be in GMT format; otherwise, the format should be CSV."
             " Please refer to 'input.gmt' and 'input.csv' files in the"
             " 'examples' directory for example files.",
-        "species_tax_file": "Name of tab-delimited file containing species"
+        "species_taxa_file": "Name of tab-delimited file containing species"
             " name and taxanomy ID associations.",
         "threshold": "Minimum Z score a peptide must maintain to be"
             " considered in Gene Set Enrichment Analysis.",
@@ -68,7 +67,6 @@ plugin.pipelines.register_function(
             " the data set.",
         "permutation_num": "Number of permutations. Minimal possible nominal"
             " p-value is about 1/perm.",
-        "out_table_name": "Name given to the resulting GSEA result.",
         "step_z_thresh": "",
         "upper_z_thresh": "",
         "lower_z_thresh": "",
@@ -78,16 +76,16 @@ plugin.pipelines.register_function(
         "pepsirf_binary": "Path to pepsirf binary."
     },
     # TODO: Semantic Type for GSEA result table?
-    # outputs=[("scatter_plot", Visualization)],
+    outputs=[("scatter_plot", Visualization)],
     # outputs=[("volcano_plot", Visualization)],
-    outputs=[("scatter_plot", Visualization), ("volcano_plot", Visualization)],
+    # outputs=[("scatter_plot", Visualization), ("volcano_plot", Visualization)],
     output_descriptions={
         "scatter_plot": "Name of plot file visualization comparison between"
             " two samples. This plot includes the smooth spline fit to the"
             " given data and highlights the leading edge peptides for all"
             " significant taxa.",
-        "volcano_plot": "Name of plot file visualization comparison between"
-            " enrichment scores (ES) and p-values."
+        # "volcano_plot": "Name of plot file visualization comparison between"
+        #     " enrichment scores (ES) and p-values."
     },
     name="Make PSEA Table",
     description="" # TODO: get a description

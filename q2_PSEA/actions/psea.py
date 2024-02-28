@@ -1,41 +1,36 @@
 import gseapy as gp
 import numpy as np
+import os
 import pandas as pd
 import rpy2.robjects as ro
 import qiime2
 import q2_PSEA.utils as utils
+import tempfile
 
 from math import isnan, log, pow
 from rpy2.robjects import pandas2ri
 from scipy import interpolate
-from q2_pepsirf.format_types import (
-    PepsirfContingencyTSVFormat, PepsirfInfoSNPNFormat
-)
-# from q2_PSEA.utils import (
-#     generate_metadata, remove_peptides_in_csv_format,
-#     remove_peptides_in_gmt_format, save_taxa_leading_peps_file
-# )
+from q2_pepsirf.format_types import PepsirfContingencyTSVFormat
 from q2_PSEA.actions.r_functions import INTERNAL
 
 
 pandas2ri.activate()
 
 
-# TODO: figure out how to handle colliding GSEA parameters
+# TODO: figure out how to combine all pairs into a single chart
 def make_psea_table(
         ctx,
         scores_file,
         timepoints_file,
         pairs_file,
         peptide_sets_file,
-        threshold,  # TODO: ask for suggested default value
-        p_val_thresh = float("nan"),
-        es_thresh = 0.4,  # TODO: get suggestion for default value
-        species_tax_file=None,
+        threshold,
+        p_val_thresh=float("nan"),
+        es_thresh=0.4,
+        species_taxa_file=None,
         min_size=15,
         max_size=2000,
         permutation_num=10000,  # as per original PSEA code
-        out_table_name="",
         step_z_thresh=5,
         upper_z_thresh=30,
         lower_z_thresh=5,
@@ -43,8 +38,7 @@ def make_psea_table(
         r_ctrl=True,
         threads=4,
         pepsirf_binary="pepsirf"
-):
-    # TODO: change into temp directory
+):    
     volcano = ctx.get_action("ps-plot", "volcano")
     zscatter = ctx.get_action("ps-plot", "zscatter")
 
@@ -55,141 +49,133 @@ def make_psea_table(
         ]
     with open(timepoints_file, "r") as fh:
         timepoints = fh.readlines()[0].strip().split()
+
     scores = pd.read_csv(scores_file, sep="\t", index_col=0)
-    # TODO: change to temp dir to do work
     processed_scores = process_scores(scores, pairs)
     processed_scores.to_csv("proc_scores.tsv", sep="\t")
 
-    # check the user wants to process using R
-    if r_ctrl:
-        if out_table_name == "":
-            out_table_name = "r_table.tsv"
+    with tempfile.TemporaryDirectory() as tempdir:
+        print(f"Timepoint tables and spline will be written to: {tempdir}")
 
-        processed_scores = utils.remove_peptides_in_csv_format(
-            processed_scores, peptide_sets_file
+        if r_ctrl:
+            processed_scores = utils.remove_peptides_in_csv_format(
+                processed_scores, peptide_sets_file
+            )
+
+            i = 0  # must remove
+            used_pairs = []
+            pair_spline_dict = {}
+            for pair in pairs:
+                if i >= 2:
+                    break
+                if (timepoints[0] not in pair[0]
+                    or timepoints[1] not in pair[1]):
+                    continue
+
+                print(f"Working on pair ({pair[0]}, {pair[1]})...")
+            
+                spline_tup = r_max_delta_by_spline(
+                    processed_scores,
+                    pair
+                )
+                maxZ = spline_tup[0]
+                deltaZ = spline_tup[1]
+                spline_x = np.array(spline_tup[2]["x"])
+                spline_y = np.array(spline_tup[2]["y"])
+                pair_spline_dict[pair[0]] = pd.Series(spline_x)
+                pair_spline_dict[pair[1]] = pd.Series(spline_y)
+                used_pairs.append(pair)
+
+                table = INTERNAL.psea(
+                    maxZ,
+                    deltaZ,
+                    peptide_sets_file,
+                    species_taxa_file,
+                    threshold,
+                    permutation_num,
+                    min_size,
+                    max_size
+                )
+                with (ro.default_converter + pandas2ri.converter).context():
+                    table = ro.conversion.get_conversion().rpy2py(table)
+                # TODO: make consistent the column names from both R and Py
+                prefix = f"{pair[0]}~{pair[1]}"
+                table.to_csv(
+                    f"{prefix}_psea_table.tsv",
+                    sep="\t", index=False
+                )
+                i += 1
+            pd.DataFrame(used_pairs).to_csv(
+                "used_pairs.tsv", sep="\t", header=False, index=False
+            )
+            pd.DataFrame(pair_spline_dict).to_csv(
+                "timepoint_spline_values.tsv", sep="\t", index=False
+            )
+        else:
+            print(
+                "The '--p-r-ctrl' parameter has been unset, please set the"
+                " parameter to 'True' as PSEA using Python is still being"
+                " worked on."
+            )
+            # if out_table_name == "":
+            #     out_table_name = "py_table.tsv"
+
+            # processed_scores = remove_peptides_in_gmt_format(
+            #     processed_scores, peptide_sets_file
+            # )
+
+            # # TODO: reimplement loop to cover all defined pairs
+            # # run PSEA operation for current pair
+            # spline_tup = py_max_delta_by_spline(
+            #     processed_scores,
+            #     ["070060_D360.Pro_PV2T", "070060_D540.Pro_PV2T"]
+            # )
+            # maxZ = spline_tup[0]
+            # deltaZ = spline_tup[1]
+
+            # table = psea(
+            #     maxZ=maxZ,
+            #     deltaZ=deltaZ,
+            #     peptide_sets_file=peptide_sets_file,
+            #     species_taxa_file=species_taxa_file,
+            #     threshold=threshold,
+            #     min_size=min_size,
+            #     max_size=max_size,
+            #     permutation_num=permutation_num,
+            #     threads=threads,
+            #     outdir="table_outdir"
+            # )
+            # table.to_csv(out_table_name, sep="\t", index=False)
+
+        processed_scores_art = ctx.make_artifact(
+            type="FeatureTable[Zscore]",
+            view="proc_scores.tsv",
+            view_type=PepsirfContingencyTSVFormat
         )
 
-        # TODO: also implement loop here
-        pair = ["070060_D360.Pro_PV2T", "070060_D540.Pro_PV2T"]
-        spline_tup = r_max_delta_by_spline(
-            processed_scores,
-            pair
-        )
-        maxZ = spline_tup[0]
-        deltaZ = spline_tup[1]
-        spline_x = list(spline_tup[2]["x"])
-        spline_y = list(spline_tup[2]["y"])
-
-        table = INTERNAL.psea(
-            maxZ,
-            deltaZ,
-            peptide_sets_file,
-            species_tax_file,
-            threshold,
-            permutation_num,
-            min_size,
-            max_size
-        )
-        with (ro.default_converter + pandas2ri.converter).context():
-            table = ro.conversion.get_conversion().rpy2py(table)
-        # TODO: make consistent the column names from both R and Py
-        table.to_csv(out_table_name, sep="\t", index=False)
-    # otherwise, assume user wants to use Python
-    else:
-        print(
-            "The '--p-r-ctrl' parameter has been unset, please set the"
-            " parameter to 'True' as PSEA using Python is still being worked"
-            " on."
-        )
-        # if out_table_name == "":
-        #     out_table_name = "py_table.tsv"
-
-        # processed_scores = remove_peptides_in_gmt_format(
-        #     processed_scores, peptide_sets_file
-        # )
-
-        # # TODO: reimplement loop to cover all defined pairs
-        # # run PSEA operation for current pair
-        # spline_tup = py_max_delta_by_spline(
-        #     processed_scores,
-        #     ["070060_D360.Pro_PV2T", "070060_D540.Pro_PV2T"]
-        # )
-        # maxZ = spline_tup[0]
-        # deltaZ = spline_tup[1]
-
-        # table = psea(
-        #     maxZ=maxZ,
-        #     deltaZ=deltaZ,
-        #     peptide_sets_file=peptide_sets_file,
-        #     species_tax_file=species_tax_file,
-        #     threshold=threshold,
-        #     min_size=min_size,
-        #     max_size=max_size,
-        #     permutation_num=permutation_num,
-        #     threads=threads,
-        #     outdir="table_outdir"
-        # )
-        # table.to_csv(out_table_name, sep="\t", index=False)
-
-    # TODO: maybe this should go in a function?
-    # TODO: should this be passed pairs for each iteration?
-    pair = ["070060_D360.Pro_PV2T", "070060_D540.Pro_PV2T"]
-
-    timepoints_scores = f"{pair[0]}_{pair[1]}_proc_scores.tsv"
-    processed_scores.loc[:, pair].to_csv(timepoints_scores, sep="\t")
-    proc_scores_art = ctx.make_artifact(
-        type="FeatureTable[Zscore]",
-        view=timepoints_scores,
-        view_type=PepsirfContingencyTSVFormat
-    )
-    scores_art = ctx.make_artifact(
-        type="FeatureTable[Normed]",
-        view=scores_file,
-        view_type=PepsirfContingencyTSVFormat
-    )
-    # grab species names or IDs for leading edge highlights
-    if species_tax_file:
-        taxa = table.loc[:, "species_name"].to_list()
-        highlight_df = table.loc[:, [
-            "p.adjust", "species_name", "core_enrichment"
-        ]]
-    else:
-        taxa = table.loc[:, "ID"].to_list()
-        highlight_df = table.loc[:, ["p.adjust", "ID", "core_enrichment"]]
-    highlight_df.index.name = "sample-id"
-
-    spline_df = pd.DataFrame({ "x": spline_x, "y": spline_y })
-    indexes = []
-    for i in range(len(spline_x)):
-        indexes.append(f"{i}")
-    spline_df.index = indexes
-    spline_df.index.name = "sample-id"
-
-    if isnan(p_val_thresh):
-        p_val_thresh = 0.05 / len(taxa)
+        if isnan(p_val_thresh):
+            p_val_thresh = 0.05 / len(taxa)
     
-    # TODO: implement loop for all species?
-    scatter_plot, = zscatter(
-        zscores=proc_scores_art,
-        spline_md=qiime2.Metadata(spline_df),
-        highlight_thresh=p_val_thresh,
-        highlight_md=qiime2.Metadata(highlight_df)
-    )
+        scatter_plot, = zscatter(
+            zscores=processed_scores_art,
+            pairs_file="used_pairs.tsv",
+            spline_file="timepoint_spline_values.tsv",
+            highlight_thresh=p_val_thresh,
+            species_taxa_file=species_taxa_file
+        )
 
-    # TODO: consider passing Metadata
-    p_vals = table.loc[:, "p.adjust"].to_list()
-    es = table.loc[:, "NES"].to_list()
-    volcano_plot, = volcano(
-        x=es,
-        y=p_vals,
-        taxa=taxa,
-        x_thresh=es_thresh,
-        y_thresh=p_val_thresh,
-        x_label="Enrichment score",
-        y_label="Adjusted p-values"
-    )
+        # scatter_plot, volcano_plot = visualize(
+        #     ctx,
+        #     processed_scores,
+        #     pairs,
+        #     p_val_thresh,
+        #     es_thresh,
+        #     species_taxa_file,
+        #     spline_x,
+        #     spline_y
+        # )
 
-    return scatter_plot, volcano_plot
+    return scatter_plot
 
 
 def py_max_delta_by_spline(data, timepoints) -> tuple:
@@ -249,7 +235,7 @@ def r_max_delta_by_spline(data, timepoints) -> tuple:
 
     with (ro.default_converter + pandas2ri.converter).context():
         maxZ = rapply(data.loc[:, timepoints], 1, "max")
-        # TODO: `spline` object ends of coming back as an OrdDict; when passed
+        # TODO: `spline` object ends up coming back as an OrdDict; when passed
         # to another function, an error is thrown explaining that py2rpy is not
         # defined for rpy2.rlike.containers.OrdDict; this must be revisted to
         # fix having to do the spline operation twice
@@ -271,7 +257,7 @@ def psea(
     maxZ: pd.Series,
     deltaZ: pd.Series,
     peptide_sets_file: str,
-    species_tax_file: str,
+    species_taxa_file: str,
     threshold: float,
     permutation_num: int = 0,
     min_size: int = 15,
@@ -290,7 +276,7 @@ def psea(
 
     peptide_sets_file : str
 
-    species_tax_file : str
+    species_taxa_file : str
 
     threshold : float
 
@@ -337,14 +323,14 @@ def psea(
     )
 
     # check that species names are important
-    if species_tax_file is not None:
+    if species_taxa_file is not None:
         # grab result table and include "Name" column
         pre_res = res.res2d.loc[:, [
             "Name", "Term", "ES", "NES", "NOM p-val", "FDR q-val", "FWER p-val"
         ]]
         # grab species name to taxanomic ID mapping
         species_tax_map = pd.read_csv(
-            species_tax_file,
+            species_taxa_file,
             sep="\t",
             header=None,
             index_col=0
@@ -428,3 +414,79 @@ def spline(knots, y):
     # smoothing condition `s` from smooth.spline() in original R code
     t, c, k = interpolate.splrep(x, y, t=q_knots, s=0.788458)
     return interpolate.BSpline(t, c, k)
+
+
+def visualize(
+        ctx,
+        processed_scores,
+        pairs,
+        p_val_thresh,
+        es_thresh,
+        species_taxa_file,
+        spline_x,
+        spline_y
+):
+    """
+    Parameters
+    ----------
+
+    Return
+    ------
+    """
+    volcano = ctx.get_action("ps-plot", "volcano")
+    zscatter = ctx.get_action("ps-plot", "zscatter")
+
+    processed_scores_art = ctx.make_artifact(
+        type="FeatureTable[Zscore]",
+        view="proc_scores.tsv",
+        view_type=PepsirfContingencyTSVFormat
+    )
+    # grab species names or IDs for leading edge highlights
+    if species_taxa_file:
+        taxa = table.loc[:, "species_name"].to_list()
+        highlight_dict = {
+            "p.adjust": table.loc[:, "p.adjust"].to_list(),
+            "core_enrichment": table.loc[:, "core_enrichment"].to_list()
+        }
+    else:
+        taxa = table.index.to_list()
+        highlight_dict = {
+            "p.adjust": table.loc[:, "p.adjust"].to_list(),
+            "core_enrichment": table.loc[:, "core_enrichment"].to_list()
+        }
+    highlight_df = pd.DataFrame(highlight_dict)
+    highlight_df.index = taxa
+    highlight_df.index.name = "sample-id"
+
+    spline_md = utils.make_metadata(
+        pd.DataFrame({ "x": spline_x, "y": spline_y }), len(spline_x)
+    )
+
+    pairs_md = utils.make_metadata(pd.DataFrame(pairs), len(pairs))
+
+    if isnan(p_val_thresh):
+        p_val_thresh = 0.05 / len(taxa)
+    
+    scatter_plot, = zscatter(
+        zscores=processed_scores_art,
+        pairs=pairs_md,
+        spline_md=spline_md,
+        highlight_thresh=p_val_thresh,
+        highlight_md=qiime2.Metadata(highlight_df)
+    )
+
+    # taxa = table.loc[:, "species_name"].to_list()
+    # p_vals = table.loc[:, "p.adjust"].to_list()
+    # es = table.loc[:, "NES"].to_list()
+    # volcano_plot, = volcano(
+    #     x=es,
+    #     y=p_vals,
+    #     taxa=taxa,
+    #     x_thresh=es_thresh,
+    #     y_thresh=p_val_thresh,
+    #     x_label="Enrichment score",
+    #     y_label="Adjusted p-values"
+    # )
+    volcano_plot = qiime2.Visualization()
+
+    return scatter_plot, volcano_plot
