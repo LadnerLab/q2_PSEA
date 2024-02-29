@@ -63,6 +63,7 @@ def make_psea_table(
             )
 
             i = 0  # must remove
+            p_val_thresholds = []
             used_pairs = []
             pair_spline_dict = {}
             for pair in pairs:
@@ -101,15 +102,26 @@ def make_psea_table(
                 # TODO: make consistent the column names from both R and Py
                 prefix = f"{pair[0]}~{pair[1]}"
                 table.to_csv(
-                    f"{prefix}_psea_table.tsv",
+                    f"{tempdir}/{prefix}_psea_table.tsv",
                     sep="\t", index=False
                 )
+                table.to_csv(f"{prefix}_psea_table.tsv", sep="\t", index=False)
+
+                if species_taxa_file:
+                    taxa = table.loc[:, "species_name"].to_list()
+                else:
+                    taxa = table.loc[:, "ID"].to_list()
+
+                if isnan(p_val_thresh):
+                    p_val_thresholds.append(0.05 / len(taxa))
+
                 i += 1
             pd.DataFrame(used_pairs).to_csv(
-                "used_pairs.tsv", sep="\t", header=False, index=False
+                f"{tempdir}/used_pairs.tsv", sep="\t",
+                header=False, index=False
             )
             pd.DataFrame(pair_spline_dict).to_csv(
-                "timepoint_spline_values.tsv", sep="\t", index=False
+                f"{tempdir}/timepoint_spline_values.tsv", sep="\t", index=False
             )
         else:
             print(
@@ -152,15 +164,13 @@ def make_psea_table(
             view="proc_scores.tsv",
             view_type=PepsirfContingencyTSVFormat
         )
-
-        if isnan(p_val_thresh):
-            p_val_thresh = 0.05 / len(taxa)
     
         scatter_plot, = zscatter(
             zscores=processed_scores_art,
-            pairs_file="used_pairs.tsv",
-            spline_file="timepoint_spline_values.tsv",
-            highlight_thresh=p_val_thresh,
+            pairs_file=f"{tempdir}/used_pairs.tsv",
+            spline_file=f"{tempdir}/timepoint_spline_values.tsv",
+            highlight_data=tempdir,
+            highlight_thresholds=p_val_thresholds,
             species_taxa_file=species_taxa_file
         )
 
