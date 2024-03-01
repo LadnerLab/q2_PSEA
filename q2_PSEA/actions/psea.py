@@ -31,7 +31,7 @@ def make_psea_table(
         threshold,  # TODO: ask for suggested default value
         p_val_thresh = float("nan"),
         es_thresh = 0.4,  # TODO: get suggestion for default value
-        species_tax_file=None,
+        species_taxa_file=None,
         min_size=15,
         max_size=2000,
         permutation_num=10000,  # as per original PSEA code
@@ -70,30 +70,32 @@ def make_psea_table(
         )
 
         # TODO: also implement loop here
-        pair = ["070060_D360.Pro_PV2T", "070060_D540.Pro_PV2T"]
-        spline_tup = r_max_delta_by_spline(
-            processed_scores,
-            pair
-        )
-        maxZ = spline_tup[0]
-        deltaZ = spline_tup[1]
-        spline_x = list(spline_tup[2]["x"])
-        spline_y = list(spline_tup[2]["y"])
+        for pair in pairs:
+            spline_tup = r_max_delta_by_spline(
+                processed_scores,
+                pair
+            )
+            maxZ = spline_tup[0]
+            deltaZ = spline_tup[1]
+            spline_x = list(spline_tup[2]["x"])
+            spline_y = list(spline_tup[2]["y"])
 
-        table = INTERNAL.psea(
-            maxZ,
-            deltaZ,
-            peptide_sets_file,
-            species_tax_file,
-            threshold,
-            permutation_num,
-            min_size,
-            max_size
-        )
-        with (ro.default_converter + pandas2ri.converter).context():
-            table = ro.conversion.get_conversion().rpy2py(table)
-        # TODO: make consistent the column names from both R and Py
-        table.to_csv(out_table_name, sep="\t", index=False)
+            table = INTERNAL.psea(
+                maxZ,
+                deltaZ,
+                peptide_sets_file,
+                species_taxa_file,
+                threshold,
+                permutation_num,
+                min_size,
+                max_size
+            )
+            with (ro.default_converter + pandas2ri.converter).context():
+                table = ro.conversion.get_conversion().rpy2py(table)
+            # TODO: make consistent the column names from both R and Py
+            table.to_csv(
+                f"{pair[0]}~{pair[1]}_psea_table.tsv", sep="\t", index=False
+            )
     # otherwise, assume user wants to use Python
     else:
         print(
@@ -121,7 +123,7 @@ def make_psea_table(
         #     maxZ=maxZ,
         #     deltaZ=deltaZ,
         #     peptide_sets_file=peptide_sets_file,
-        #     species_tax_file=species_tax_file,
+        #     species_taxa_file=species_taxa_file,
         #     threshold=threshold,
         #     min_size=min_size,
         #     max_size=max_size,
@@ -133,8 +135,6 @@ def make_psea_table(
 
     # TODO: maybe this should go in a function?
     # TODO: should this be passed pairs for each iteration?
-    pair = ["070060_D360.Pro_PV2T", "070060_D540.Pro_PV2T"]
-
     timepoints_scores = f"{pair[0]}_{pair[1]}_proc_scores.tsv"
     processed_scores.loc[:, pair].to_csv(timepoints_scores, sep="\t")
     proc_scores_art = ctx.make_artifact(
@@ -148,7 +148,7 @@ def make_psea_table(
         view_type=PepsirfContingencyTSVFormat
     )
     # grab species names or IDs for leading edge highlights
-    if species_tax_file:
+    if species_taxa_file:
         taxa = table.loc[:, "species_name"].to_list()
         highlight_df = table.loc[:, [
             "p.adjust", "species_name", "core_enrichment"
@@ -271,7 +271,7 @@ def psea(
     maxZ: pd.Series,
     deltaZ: pd.Series,
     peptide_sets_file: str,
-    species_tax_file: str,
+    species_taxa_file: str,
     threshold: float,
     permutation_num: int = 0,
     min_size: int = 15,
@@ -290,7 +290,7 @@ def psea(
 
     peptide_sets_file : str
 
-    species_tax_file : str
+    species_taxa_file : str
 
     threshold : float
 
@@ -337,14 +337,14 @@ def psea(
     )
 
     # check that species names are important
-    if species_tax_file is not None:
+    if species_taxa_file is not None:
         # grab result table and include "Name" column
         pre_res = res.res2d.loc[:, [
             "Name", "Term", "ES", "NES", "NOM p-val", "FDR q-val", "FWER p-val"
         ]]
         # grab species name to taxanomic ID mapping
         species_tax_map = pd.read_csv(
-            species_tax_file,
+            species_taxa_file,
             sep="\t",
             header=None,
             index_col=0
@@ -428,3 +428,7 @@ def spline(knots, y):
     # smoothing condition `s` from smooth.spline() in original R code
     t, c, k = interpolate.splrep(x, y, t=q_knots, s=0.788458)
     return interpolate.BSpline(t, c, k)
+
+
+def visualize():
+    pass
