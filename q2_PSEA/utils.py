@@ -26,6 +26,18 @@ def generate_metadata(replicates):
     return qiime2.metadata.CategoricalMetadataColumn(meta_series)
 
 
+def make_metadata(df, length):
+    """Given a Pandas DataFrame, and the length of columns, returns Qiime2
+    Metadata
+    """
+    indexes = []
+    for i in range(length):
+        indexes.append(f"{i}")
+    df.index = indexes
+    df.index.name = "sample-id"
+    return qiime2.Metadata(df)
+
+
 def save_taxa_leading_peps_file(
         taxa_peps_filepath,
         taxa,

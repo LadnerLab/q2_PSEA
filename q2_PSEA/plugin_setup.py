@@ -34,10 +34,6 @@ plugin.pipelines.register_function(
         "min_size": Int,
         "max_size": Int,
         "permutation_num": Int,
-        "out_table_name": Str,
-        "step_z_thresh": Int,
-        "upper_z_thresh": Int,
-        "lower_z_thresh": Int,
         "r_ctrl": Bool,
         "threads": Int,
         "pepsirf_binary": Str
@@ -68,18 +64,11 @@ plugin.pipelines.register_function(
             " the data set.",
         "permutation_num": "Number of permutations. Minimal possible nominal"
             " p-value is about 1/perm.",
-        "out_table_name": "Name given to the resulting GSEA result.",
-        "step_z_thresh": "",
-        "upper_z_thresh": "",
-        "lower_z_thresh": "",
         "r_ctrl": "Specifies to run PSEA using Python or R functions. If set"
             " to True, then R functions will be used.",
         "threads": "Number of threads with which to run ssGSEA operation.",
         "pepsirf_binary": "Path to pepsirf binary."
     },
-    # TODO: Semantic Type for GSEA result table?
-    # outputs=[("scatter_plot", Visualization)],
-    # outputs=[("volcano_plot", Visualization)],
     outputs=[("scatter_plot", Visualization), ("volcano_plot", Visualization)],
     output_descriptions={
         "scatter_plot": "Name of plot file visualization comparison between"
@@ -90,5 +79,11 @@ plugin.pipelines.register_function(
             " enrichment scores (ES) and p-values."
     },
     name="Make PSEA Table",
-    description="" # TODO: get a description
+    description="Qiime2 plug-in which provides a Python wrapper around R"
+        " functions to perform Peptide Set Enrichment Analysis. A Z score"
+        " scatter plot for each sample replicate pair complete with a spline"
+        " and highlighting of significant taxa. As well as a volcano plot"
+        " showing relationship between adjusted p-values and normalized"
+        " enrichment scores (NES) with highlighting of points which pass"
+        " provided thresholds."
 )
