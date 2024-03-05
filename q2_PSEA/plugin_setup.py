@@ -75,17 +75,16 @@ plugin.pipelines.register_function(
         "threads": "Number of threads with which to run ssGSEA operation.",
         "pepsirf_binary": "Path to pepsirf binary."
     },
-    # TODO: Semantic Type for GSEA result table?
-    outputs=[("scatter_plot", Visualization)],
+    # outputs=[("scatter_plot", Visualization)],
     # outputs=[("volcano_plot", Visualization)],
-    # outputs=[("scatter_plot", Visualization), ("volcano_plot", Visualization)],
+    outputs=[("scatter_plot", Visualization), ("volcano_plot", Visualization)],
     output_descriptions={
         "scatter_plot": "Name of plot file visualization comparison between"
             " two samples. This plot includes the smooth spline fit to the"
             " given data and highlights the leading edge peptides for all"
             " significant taxa.",
-        # "volcano_plot": "Name of plot file visualization comparison between"
-        #     " enrichment scores (ES) and p-values."
+        "volcano_plot": "Name of plot file visualization comparison between"
+            " enrichment scores (ES) and p-values."
     },
     name="Make PSEA Table",
     description="" # TODO: get a description

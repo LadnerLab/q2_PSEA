@@ -17,7 +17,6 @@ from q2_PSEA.actions.r_functions import INTERNAL
 pandas2ri.activate()
 
 
-# TODO: figure out how to combine all pairs into a single chart
 def make_psea_table(
         ctx,
         scores_file,
@@ -49,7 +48,6 @@ def make_psea_table(
         ]
     with open(timepoints_file, "r") as fh:
         timepoints = fh.readlines()[0].strip().split()
-
     scores = pd.read_csv(scores_file, sep="\t", index_col=0)
     processed_scores = process_scores(scores, pairs)
 
@@ -63,13 +61,12 @@ def make_psea_table(
                 processed_scores, peptide_sets_file
             )
 
-            i = 0  # must remove
+            titles = []
+            taxa_access = "species_name"
             p_val_thresholds = []
             used_pairs = []
             pair_spline_dict = {}
             for pair in pairs:
-                if i >= 2:
-                    break
                 if (timepoints[0] not in pair[0]
                     or timepoints[1] not in pair[1]):
                     continue
@@ -106,17 +103,17 @@ def make_psea_table(
                     f"{tempdir}/{prefix}_psea_table.tsv",
                     sep="\t", index=False
                 )
-                table.to_csv(f"{prefix}_psea_table.tsv", sep="\t", index=False)
 
                 if species_taxa_file:
                     taxa = table.loc[:, "species_name"].to_list()
                 else:
                     taxa = table.loc[:, "ID"].to_list()
+                    taxa_access = "ID"
 
                 if isnan(p_val_thresh):
                     p_val_thresholds.append(0.05 / len(taxa))
 
-                i += 1
+                titles.append(prefix)
 
             pd.DataFrame(used_pairs).to_csv(
                 f"{tempdir}/used_pairs.tsv", sep="\t",
@@ -163,7 +160,7 @@ def make_psea_table(
 
         processed_scores_art = ctx.make_artifact(
             type="FeatureTable[Zscore]",
-            view="proc_scores.tsv",
+            view=f"{tempdir}/proc_scores.tsv",
             view_type=PepsirfContingencyTSVFormat
         )
     
@@ -176,28 +173,17 @@ def make_psea_table(
             species_taxa_file=species_taxa_file
         )
 
-        # volcano_plot, = volcano(
-        #     coords_data=tempdir,
-        #     taxa=taxa,
-        #     x_thresholds=es_thresholds,
-        #     y_thresholds=p_val_thresholds,
-        #     x_label="Enrichment score",
-        #     y_label="Adjusted p-values"
-        # )
+        volcano_plot, = volcano(
+            xy_dir=tempdir,
+            xy_access=["p.adjust", "NES"],
+            taxa_access=taxa_access,
+            x_threshold=es_thresh,
+            y_thresholds=p_val_thresholds,
+            xy_labels=["Enrichment score", "Adjusted p-values"],
+            titles=titles
+        )
 
-        # scatter_plot, volcano_plot = visualize(
-        #     ctx,
-        #     processed_scores,
-        #     pairs,
-        #     p_val_thresh,
-        #     es_thresh,
-        #     species_taxa_file,
-        #     spline_x,
-        #     spline_y
-        # )
-
-    return scatter_plot
-    # return volcano_plot
+    return scatter_plot, volcano_plot
 
 
 def py_max_delta_by_spline(data, timepoints) -> tuple:
