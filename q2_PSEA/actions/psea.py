@@ -52,10 +52,11 @@ def make_psea_table(
 
     scores = pd.read_csv(scores_file, sep="\t", index_col=0)
     processed_scores = process_scores(scores, pairs)
-    processed_scores.to_csv("proc_scores.tsv", sep="\t")
 
     with tempfile.TemporaryDirectory() as tempdir:
         print(f"Timepoint tables and spline will be written to: {tempdir}")
+
+        processed_scores.to_csv(f"{tempdir}/proc_scores.tsv", sep="\t")
 
         if r_ctrl:
             processed_scores = utils.remove_peptides_in_csv_format(
@@ -116,6 +117,7 @@ def make_psea_table(
                     p_val_thresholds.append(0.05 / len(taxa))
 
                 i += 1
+
             pd.DataFrame(used_pairs).to_csv(
                 f"{tempdir}/used_pairs.tsv", sep="\t",
                 header=False, index=False
@@ -174,6 +176,15 @@ def make_psea_table(
             species_taxa_file=species_taxa_file
         )
 
+        # volcano_plot, = volcano(
+        #     coords_data=tempdir,
+        #     taxa=taxa,
+        #     x_thresholds=es_thresholds,
+        #     y_thresholds=p_val_thresholds,
+        #     x_label="Enrichment score",
+        #     y_label="Adjusted p-values"
+        # )
+
         # scatter_plot, volcano_plot = visualize(
         #     ctx,
         #     processed_scores,
@@ -186,6 +197,7 @@ def make_psea_table(
         # )
 
     return scatter_plot
+    # return volcano_plot
 
 
 def py_max_delta_by_spline(data, timepoints) -> tuple:
