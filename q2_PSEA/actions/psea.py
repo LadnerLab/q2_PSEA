@@ -49,8 +49,6 @@ def make_psea_table(
     processed_scores = process_scores(scores, pairs)
 
     with tempfile.TemporaryDirectory() as tempdir:
-        print(f"Timepoint tables and spline will be written to: {tempdir}")
-
         processed_scores.to_csv(f"{tempdir}/proc_scores.tsv", sep="\t")
 
         if r_ctrl:
@@ -172,7 +170,7 @@ def make_psea_table(
 
         volcano_plot, = volcano(
             xy_dir=tempdir,
-            xy_access=["p.adjust", "NES"],
+            xy_access=["NES", "p.adjust"],
             taxa_access=taxa_access,
             x_threshold=es_thresh,
             y_thresholds=p_val_thresholds,
