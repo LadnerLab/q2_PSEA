@@ -34,6 +34,7 @@ plugin.pipelines.register_function(
         "min_size": Int,
         "max_size": Int,
         "permutation_num": Int,
+        "table_dir": Str,
         "r_ctrl": Bool,
         "threads": Int,
         "pepsirf_binary": Str
@@ -64,6 +65,7 @@ plugin.pipelines.register_function(
             " the data set.",
         "permutation_num": "Number of permutations. Minimal possible nominal"
             " p-value is about 1/perm.",
+        "table_dir": "Directory where resulting PSEA tables will be stored.",
         "r_ctrl": "Specifies to run PSEA using Python or R functions. If set"
             " to True, then R functions will be used.",
         "threads": "Number of threads with which to run ssGSEA operation.",

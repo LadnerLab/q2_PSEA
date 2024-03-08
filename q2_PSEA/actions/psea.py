@@ -30,6 +30,7 @@ def make_psea_table(
         min_size=15,
         max_size=2000,
         permutation_num=10000,  # as per original PSEA code
+        table_dir="./psea_table_dir",
         # True by default since Python implementation is still being developed
         r_ctrl=True,
         threads=4,
@@ -37,6 +38,14 @@ def make_psea_table(
 ):    
     volcano = ctx.get_action("ps-plot", "volcano")
     zscatter = ctx.get_action("ps-plot", "zscatter")
+
+    if not os.path.exists(table_dir):
+        os.mkdir(table_dir)
+    else:
+        print(
+            f"Warning: the directory '{table_dir}' already exists; files may"
+            "be overwritten!"
+        )
 
     with open(pairs_file, "r") as fh:
         pairs = [
@@ -95,7 +104,7 @@ def make_psea_table(
                 # TODO: make consistent the column names from both R and Py
                 prefix = f"{pair[0]}~{pair[1]}"
                 table.to_csv(
-                    f"{tempdir}/{prefix}_psea_table.tsv",
+                    f"{table_dir}/{prefix}_psea_table.tsv",
                     sep="\t", index=False
                 )
 
@@ -163,13 +172,13 @@ def make_psea_table(
             zscores=processed_scores_art,
             pairs_file=f"{tempdir}/used_pairs.tsv",
             spline_file=f"{tempdir}/timepoint_spline_values.tsv",
-            highlight_data=tempdir,
+            highlight_data=table_dir,
             highlight_thresholds=p_val_thresholds,
             species_taxa_file=species_taxa_file
         )
 
         volcano_plot, = volcano(
-            xy_dir=tempdir,
+            xy_dir=table_dir,
             xy_access=["NES", "p.adjust"],
             taxa_access=taxa_access,
             x_threshold=es_thresh,
