@@ -1,4 +1,61 @@
 import pandas as pd
+import qiime2
+
+
+def generate_metadata(replicates):
+    """
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+    """
+    base_reps = []
+
+    replicates.sort()
+
+    for replicate in replicates:
+        base_seq_name = replicate.split("_")[2]
+        base_reps.append(base_seq_name)
+
+    meta_series = pd.Series(data=base_reps, index=replicates)
+    meta_series.index.name = "sample-id"
+    meta_series.name = "source"
+
+    return qiime2.metadata.CategoricalMetadataColumn(meta_series)
+
+
+def make_metadata(df, length):
+    """Given a Pandas DataFrame, and the length of columns, returns Qiime2
+    Metadata
+    """
+    indexes = []
+    for i in range(length):
+        indexes.append(f"{i}")
+    df.index = indexes
+    df.index.name = "sample-id"
+    return qiime2.Metadata(df)
+
+
+def save_taxa_leading_peps_file(
+        taxa_peps_filepath,
+        taxa,
+        leading_peps
+    ) -> None:
+    """
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+    """
+    with open(taxa_peps_filepath, "w") as fh:
+        for i in range(len(taxa)):
+            fh.write(
+                taxa[i] + "\t" + leading_peps[i].replace("/", "\t") + "\n"
+            )
 
 
 def remove_peptides(scores, peptide_sets_file, r_ctrl) -> pd.DataFrame:

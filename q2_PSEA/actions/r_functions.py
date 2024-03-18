@@ -8,8 +8,6 @@ delta_by_spline <- function(timepoint1, timepoint2)
 
     names(deltaZ) <- rownames(deltaZ)
 
-    # uncomment if smooth spline values needed in future
-    # return(list(deltaZ, SS$x, SS$y))
     return(deltaZ)
 }
 
