@@ -70,6 +70,8 @@ def make_psea_table(
             p_val_thresholds = []
             used_pairs = []
             pair_spline_dict = {}
+
+            added_p_thresh = False
             for pair in pairs:
                 if (timepoints[0] not in pair[0]
                     or timepoints[1] not in pair[1]):
@@ -116,6 +118,9 @@ def make_psea_table(
 
                 if isnan(p_val_thresh):
                     p_val_thresholds.append(0.05 / len(taxa))
+                elif not added_p_thresh:
+                    p_val_thresholds.append(p_val_thresh)
+                    added_p_thresh = True
 
                 titles.append(prefix)
 
