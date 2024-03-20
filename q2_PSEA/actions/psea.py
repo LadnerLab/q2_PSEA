@@ -1,4 +1,4 @@
-import gseapy as gp
+# import gseapy as gp
 import numpy as np
 import os
 import pandas as pd
@@ -119,7 +119,7 @@ def make_psea_table(
                 if isnan(p_val_thresh):
                     p_val_thresholds.append(0.05 / len(taxa))
                 elif not added_p_thresh:
-                    p_val_thresholds.append(p_val_thresh)
+                    p_val_thresholds.append(p_val_thresh / len(taxa))
                     added_p_thresh = True
 
                 titles.append(prefix)
