@@ -1,5 +1,23 @@
-# Python analysis requirements
-gseapy
+# visualization requirements
+altair>=5.0.0
+altair-saver=0
+jsonschema=3.2.0
+selenium=4.2.0
+nodejs=18.13.0
+
+# R environment requirements
+r-base
+r-essentials
+r-ggraph
+r-ggforce
+r-scatterpie
+r-igraph
+r-biocmanager
+bioconductor-clusterprofiler
+bioconductor-enrichplot
+bioconductor-ggtree
+pillow=9.4
+r-ggplot2=3.3
 
 # R analysis requirements
 rpy2
