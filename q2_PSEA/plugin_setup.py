@@ -19,7 +19,7 @@ plugin = Plugin(
 
 # register make_psea_table function
 plugin.pipelines.register_function(
-    function=make_psea_table,
+    function=generate_vis,
     inputs={},
     input_descriptions=None,
     parameters={

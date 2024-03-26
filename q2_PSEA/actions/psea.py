@@ -17,7 +17,7 @@ from q2_PSEA.actions.r_functions import INTERNAL
 pandas2ri.activate()
 
 
-def make_psea_table(
+def generate_vis(
         ctx,
         scores_file,
         timepoints_file,
@@ -39,12 +39,15 @@ def make_psea_table(
     volcano = ctx.get_action("ps-plot", "volcano")
     zscatter = ctx.get_action("ps-plot", "zscatter")
 
+    if isnan(p_val_thresh):
+        p_val_thresh = 0.05
+
     if not os.path.exists(table_dir):
         os.mkdir(table_dir)
     else:
         print(
             f"Warning: the directory '{table_dir}' already exists; files may"
-            "be overwritten!"
+            " be overwritten!"
         )
 
     with open(pairs_file, "r") as fh:
@@ -70,8 +73,7 @@ def make_psea_table(
             p_val_thresholds = []
             used_pairs = []
             pair_spline_dict = {}
-
-            added_p_thresh = False
+            tested_peptides = None
             for pair in pairs:
                 if (timepoints[0] not in pair[0]
                     or timepoints[1] not in pair[1]):
@@ -79,6 +81,7 @@ def make_psea_table(
 
                 print(f"Working on pair ({pair[0]}, {pair[1]})...")
             
+                prefix = f"{pair[0]}~{pair[1]}"
                 spline_tup = r_max_delta_by_spline(
                     processed_scores,
                     pair
@@ -91,24 +94,33 @@ def make_psea_table(
                 pair_spline_dict[pair[1]] = pd.Series(spline_y)
                 used_pairs.append(pair)
 
-                table = INTERNAL.psea(
-                    maxZ,
-                    deltaZ,
-                    peptide_sets_file,
-                    species_taxa_file,
-                    threshold,
-                    permutation_num,
-                    min_size,
-                    max_size
-                )
-                with (ro.default_converter + pandas2ri.converter).context():
-                    table = ro.conversion.get_conversion().rpy2py(table)
-                # TODO: make consistent the column names from both R and Py
-                prefix = f"{pair[0]}~{pair[1]}"
-                table.to_csv(
-                    f"{table_dir}/{prefix}_psea_table.tsv",
-                    sep="\t", index=False
-                )
+                filter_peptides = True
+                while filter_peptides:
+                    table = INTERNAL.psea(
+                        maxZ,
+                        deltaZ,
+                        peptide_sets_file,
+                        species_taxa_file,
+                        threshold,
+                        permutation_num,
+                        min_size,
+                        max_size
+                    )
+                    with (ro.default_converter
+                            + pandas2ri.converter).context():
+                        table = ro.conversion.get_conversion().rpy2py(table)
+                    # TODO: make consistent the column names from both R and Py
+                    table.to_csv(
+                        f"{table_dir}/{prefix}_psea_table.tsv",
+                        sep="\t", index=False
+                    )
+
+                    es = table.loc[:, "enrichmentScore"]
+                    p_vals = table.loc[:, "pvalue"]
+                    for i in range(len(p_vals)):
+                        if p_vals[i] < p_val_thresh or es[i] < es_thresh:
+                            filter_peptides = False
+                    tested_peptides = table.loc[:, "all_tested_peptides"]
 
                 if species_taxa_file:
                     taxa = table.loc[:, "species_name"].to_list()
@@ -116,11 +128,7 @@ def make_psea_table(
                     taxa = table.loc[:, "ID"].to_list()
                     taxa_access = "ID"
 
-                if isnan(p_val_thresh):
-                    p_val_thresholds.append(0.05 / len(taxa))
-                elif not added_p_thresh:
-                    p_val_thresholds.append(p_val_thresh / len(taxa))
-                    added_p_thresh = True
+                p_val_thresholds.append(p_val_thresh / len(taxa))  # TODO: might need a check if was NaN?
 
                 titles.append(prefix)
 
