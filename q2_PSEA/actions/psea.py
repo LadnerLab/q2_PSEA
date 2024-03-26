@@ -61,12 +61,13 @@ def generate_vis(
     processed_scores = process_scores(scores, pairs)
 
     with tempfile.TemporaryDirectory() as tempdir:
-        processed_scores.to_csv(f"{tempdir}/proc_scores.tsv", sep="\t")
+        # TODO: review results when this version is not saved
+        # processed_scores.to_csv(f"{tempdir}/proc_scores.tsv", sep="\t")
 
         if r_ctrl:
-            processed_scores = utils.remove_peptides_in_csv_format(
+            utils.remove_peptides_in_csv_format(
                 processed_scores, peptide_sets_file
-            )
+            ).to_csv(f"{tempdir}/proc_scores.tsv", sep="\t")
 
             titles = []
             taxa_access = "species_name"
@@ -78,24 +79,27 @@ def generate_vis(
                 if (timepoints[0] not in pair[0]
                     or timepoints[1] not in pair[1]):
                     continue
+                used_pairs.append(pair)
+                processed_scores = pd.read_csv(
+                    f"proc_scores.tsv", sep="\t", index_col=0
+                )
 
                 print(f"Working on pair ({pair[0]}, {pair[1]})...")
             
                 prefix = f"{pair[0]}~{pair[1]}"
-                spline_tup = r_max_delta_by_spline(
-                    processed_scores,
-                    pair
-                )
-                maxZ = spline_tup[0]
-                deltaZ = spline_tup[1]
-                spline_x = np.array(spline_tup[2]["x"])
-                spline_y = np.array(spline_tup[2]["y"])
-                pair_spline_dict[pair[0]] = pd.Series(spline_x)
-                pair_spline_dict[pair[1]] = pd.Series(spline_y)
-                used_pairs.append(pair)
-
                 filter_peptides = True
                 while filter_peptides:
+                    spline_tup = r_max_delta_by_spline(
+                        processed_scores,
+                        pair
+                    )
+                    maxZ = spline_tup[0]
+                    deltaZ = spline_tup[1]
+                    spline_x = np.array(spline_tup[2]["x"])
+                    spline_y = np.array(spline_tup[2]["y"])
+                    pair_spline_dict[pair[0]] = pd.Series(spline_x)
+                    pair_spline_dict[pair[1]] = pd.Series(spline_y)
+
                     table = INTERNAL.psea(
                         maxZ,
                         deltaZ,
@@ -117,10 +121,13 @@ def generate_vis(
 
                     es = table.loc[:, "enrichmentScore"]
                     p_vals = table.loc[:, "pvalue"]
+                    tested_peptides = []
                     for i in range(len(p_vals)):
-                        if p_vals[i] < p_val_thresh or es[i] < es_thresh:
+                        if p_val_thresh < p_vals[i] and es_thresh < es[i]:
+                            tested_peptides.extend(table.iloc[i, 7].split("/"))
+                        else:
                             filter_peptides = False
-                    tested_peptides = table.loc[:, "all_tested_peptides"]
+                    processed_scores.drop(index=tested_peptides)
 
                 if species_taxa_file:
                     taxa = table.loc[:, "species_name"].to_list()
