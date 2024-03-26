@@ -81,7 +81,7 @@ def generate_vis(
                     continue
                 used_pairs.append(pair)
                 processed_scores = pd.read_csv(
-                    f"proc_scores.tsv", sep="\t", index_col=0
+                    f"{tempdir}/proc_scores.tsv", sep="\t", index_col=0
                 )
 
                 print(f"Working on pair ({pair[0]}, {pair[1]})...")
