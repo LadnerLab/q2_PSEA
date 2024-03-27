@@ -123,7 +123,10 @@ def generate_vis(
                     p_vals = table.loc[:, "pvalue"]
                     tested_peptides = []
                     for i in range(len(p_vals)):
+                        # TODO: watch 070236
+                        # TODO: sort table to get the "top scoring" (lowest p-val, then default to ES) virus
                         if p_val_thresh < p_vals[i] and es_thresh < es[i]:
+                            # TODO: remove peptides from peptide set
                             tested_peptides.extend(table.iloc[i, 7].split("/"))
                         else:
                             filter_peptides = False
