@@ -20,7 +20,6 @@ pandas2ri.activate()
 def make_psea_table(
         ctx,
         scores_file,
-        # REMOVE: timepoints_file,
         pairs_file,
         peptide_sets_file,
         threshold,
@@ -52,8 +51,6 @@ def make_psea_table(
             tuple(line.replace("\n", "").split("\t"))
             for line in fh.readlines()
         ]
-    # REMOVE: with open(timepoints_file, "r") as fh:
-    #     timepoints = fh.readlines()[0].strip().split()
     scores = pd.read_csv(scores_file, sep="\t", index_col=0)
     processed_scores = process_scores(scores, pairs)
 
@@ -71,10 +68,6 @@ def make_psea_table(
             used_pairs = []
             pair_spline_dict = {}
             for pair in pairs:
-                # REMOVE: if (timepoints[0] not in pair[0]
-                #     or timepoints[1] not in pair[1]):
-                #     continue
-
                 print(f"Working on pair ({pair[0]}, {pair[1]})...")
             
                 spline_tup = r_max_delta_by_spline(

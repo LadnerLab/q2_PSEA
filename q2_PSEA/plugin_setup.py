@@ -24,7 +24,6 @@ plugin.pipelines.register_function(
     input_descriptions=None,
     parameters={
         "scores_file": Str,
-        # REMOVE: "timepoints_file": Str,
         "pairs_file": Str,
         "peptide_sets_file": Str,
         "species_taxa_file": Str,
@@ -41,8 +40,6 @@ plugin.pipelines.register_function(
     },
     parameter_descriptions={
         "scores_file": "Name of Z score matrix file.",
-        # REMOVE: "timepoints_file": "Name of tab-delimited file containing information"
-        #     " referencing the time a sample was taken.",
         "pairs_file": "Name of tab-delimited file containing pairs of"
             " sample names.",
         "peptide_sets_file": "Name of file containing information about"
