@@ -9,11 +9,13 @@ import tempfile
 
 from math import isnan, log, pow
 from rpy2.robjects import pandas2ri
+from rpy2.robjects.packages import importr
 from scipy import interpolate
 from q2_pepsirf.format_types import PepsirfContingencyTSVFormat
 from q2_PSEA.actions.r_functions import INTERNAL
 
 
+cluster_profiler = importr("clusterProfiler")
 pandas2ri.activate()
 
 
@@ -58,9 +60,11 @@ def make_psea_table(
         processed_scores.to_csv(f"{tempdir}/proc_scores.tsv", sep="\t")
 
         if r_ctrl:
-            processed_scores = utils.remove_peptides_in_csv_format(
+            rread_gmt = ro.r["read.gmt"]
+            processed_scores = utils.remove_peptides_in_gmt_format(
                 processed_scores, peptide_sets_file
             )
+            peptide_sets = rread_gmt(peptide_sets_file)
 
             titles = []
             taxa_access = "species_name"
@@ -85,7 +89,7 @@ def make_psea_table(
                 table = INTERNAL.psea(
                     maxZ,
                     deltaZ,
-                    peptide_sets_file,
+                    peptide_sets,
                     species_taxa_file,
                     threshold,
                     permutation_num,

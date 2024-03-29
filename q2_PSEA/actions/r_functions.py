@@ -14,7 +14,7 @@ delta_by_spline <- function(timepoint1, timepoint2)
 psea <- function(
         maxZ,
         deltaZ,
-        peptide_sets_file,
+        peptide_sets,
         species_file,
         threshold,
         # default number of permutations from hardcoded parameter in original R
@@ -25,7 +25,7 @@ psea <- function(
 ) {
     library(clusterProfiler)
     species = read.csv(file=species_file, sep="\t", head=T)
-    peptide_sets = read.csv(file=peptide_sets_file, head=T)
+    # peptide_sets = read.csv(file=peptide_sets_file, head=T)
     peptide_sets <- peptide_sets[order(peptide_sets$gene), , drop=FALSE]
     gene_list <- sort(
         deltaZ[intersect(which(maxZ > threshold), which(deltaZ != 0))],
