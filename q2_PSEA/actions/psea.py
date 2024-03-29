@@ -20,11 +20,10 @@ pandas2ri.activate()
 def make_psea_table(
         ctx,
         scores_file,
-        timepoints_file,
         pairs_file,
         peptide_sets_file,
         threshold,
-        p_val_thresh=float("nan"),
+        p_val_thresh=0.05,
         es_thresh=0.4,
         species_taxa_file=None,
         min_size=15,
@@ -52,8 +51,6 @@ def make_psea_table(
             tuple(line.replace("\n", "").split("\t"))
             for line in fh.readlines()
         ]
-    with open(timepoints_file, "r") as fh:
-        timepoints = fh.readlines()[0].strip().split()
     scores = pd.read_csv(scores_file, sep="\t", index_col=0)
     processed_scores = process_scores(scores, pairs)
 
@@ -70,13 +67,7 @@ def make_psea_table(
             p_val_thresholds = []
             used_pairs = []
             pair_spline_dict = {}
-
-            added_p_thresh = False
             for pair in pairs:
-                if (timepoints[0] not in pair[0]
-                    or timepoints[1] not in pair[1]):
-                    continue
-
                 print(f"Working on pair ({pair[0]}, {pair[1]})...")
             
                 spline_tup = r_max_delta_by_spline(
@@ -116,11 +107,7 @@ def make_psea_table(
                     taxa = table.loc[:, "ID"].to_list()
                     taxa_access = "ID"
 
-                if isnan(p_val_thresh):
-                    p_val_thresholds.append(0.05 / len(taxa))
-                elif not added_p_thresh:
-                    p_val_thresholds.append(p_val_thresh / len(taxa))
-                    added_p_thresh = True
+                p_val_thresholds.append(p_val_thresh / len(taxa))
 
                 titles.append(prefix)
 

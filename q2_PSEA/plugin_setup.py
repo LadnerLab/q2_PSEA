@@ -24,7 +24,6 @@ plugin.pipelines.register_function(
     input_descriptions=None,
     parameters={
         "scores_file": Str,
-        "timepoints_file": Str,
         "pairs_file": Str,
         "peptide_sets_file": Str,
         "species_taxa_file": Str,
@@ -41,8 +40,6 @@ plugin.pipelines.register_function(
     },
     parameter_descriptions={
         "scores_file": "Name of Z score matrix file.",
-        "timepoints_file": "Name of tab-delimited file containing information"
-            " referencing the time a sample was taken.",
         "pairs_file": "Name of tab-delimited file containing pairs of"
             " sample names.",
         "peptide_sets_file": "Name of file containing information about"
@@ -57,7 +54,7 @@ plugin.pipelines.register_function(
         "p_val_thresh": "Specifies the value adjusted p-values must meet to be"
             " considered for highlighting in volcano and scatter plots. If a"
             " threshold is not provided, then the theshold is set to 0.05 / N"
-            " where N is the number of taxa being tested.",
+            " - where N is the number of taxa being tested.",
         "es_thresh": "Specifies the value ",
         "min_size": "Minimum allowed number of peptides from peptide set also"
             " the data set.",
