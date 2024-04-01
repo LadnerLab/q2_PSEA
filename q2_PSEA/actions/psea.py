@@ -9,28 +9,29 @@ import tempfile
 
 from math import isnan, log, pow
 from rpy2.robjects import pandas2ri
+from rpy2.robjects.packages import importr
 from scipy import interpolate
 from q2_pepsirf.format_types import PepsirfContingencyTSVFormat
 from q2_PSEA.actions.r_functions import INTERNAL
 
 
+cluster_profiler = importr("clusterProfiler")
 pandas2ri.activate()
 
 
 def generate_vis(
         ctx,
         scores_file,
-        timepoints_file,
         pairs_file,
         peptide_sets_file,
         threshold,
-        p_val_thresh=float("nan"),
+        p_val_thresh=0.05,
         es_thresh=0.4,
-        species_taxa_file=None,
+        species_taxa_file="",
         min_size=15,
         max_size=2000,
         permutation_num=10000,  # as per original PSEA code
-        table_dir="./psea_table_dir",
+        table_dir="./table_dir",
         # True by default since Python implementation is still being developed
         r_ctrl=True,
         threads=4,
@@ -55,19 +56,18 @@ def generate_vis(
             tuple(line.replace("\n", "").split("\t"))
             for line in fh.readlines()
         ]
-    with open(timepoints_file, "r") as fh:
-        timepoints = fh.readlines()[0].strip().split()
     scores = pd.read_csv(scores_file, sep="\t", index_col=0)
     processed_scores = process_scores(scores, pairs)
 
     with tempfile.TemporaryDirectory() as tempdir:
-        # TODO: review results when this version is not saved
-        # processed_scores.to_csv(f"{tempdir}/proc_scores.tsv", sep="\t")
+        processed_scores.to_csv(f"{tempdir}/proc_scores.tsv", sep="\t")
 
         if r_ctrl:
-            utils.remove_peptides_in_csv_format(
+            rread_gmt = ro.r["read.gmt"]
+            processed_scores = utils.remove_peptides_in_gmt_format(
                 processed_scores, peptide_sets_file
-            ).to_csv(f"{tempdir}/proc_scores.tsv", sep="\t")
+            )
+            peptide_sets = rread_gmt(peptide_sets_file)
 
             titles = []
             taxa_access = "species_name"
@@ -76,17 +76,10 @@ def generate_vis(
             pair_spline_dict = {}
             tested_peptides = None
             for pair in pairs:
-                if (timepoints[0] not in pair[0]
-                    or timepoints[1] not in pair[1]):
-                    continue
-                used_pairs.append(pair)
-                processed_scores = pd.read_csv(
-                    f"{tempdir}/proc_scores.tsv", sep="\t", index_col=0
-                )
-
                 print(f"Working on pair ({pair[0]}, {pair[1]})...")
-            
+                used_pairs.append(pair)
                 prefix = f"{pair[0]}~{pair[1]}"
+
                 filter_peptides = True
                 while filter_peptides:
                     spline_tup = r_max_delta_by_spline(
@@ -103,7 +96,7 @@ def generate_vis(
                     table = INTERNAL.psea(
                         maxZ,
                         deltaZ,
-                        peptide_sets_file,
+                        peptide_sets,
                         species_taxa_file,
                         threshold,
                         permutation_num,
@@ -138,7 +131,7 @@ def generate_vis(
                     taxa = table.loc[:, "ID"].to_list()
                     taxa_access = "ID"
 
-                p_val_thresholds.append(p_val_thresh / len(taxa))  # TODO: might need a check if was NaN?
+                p_val_thresholds.append(p_val_thresh / len(taxa))
 
                 titles.append(prefix)
 
