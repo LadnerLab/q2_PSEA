@@ -24,7 +24,6 @@ psea <- function(
         max_size
 ) {
     library(clusterProfiler)
-    species = read.csv(file=species_file, sep="\t", head=T)
     # peptide_sets = read.csv(file=peptide_sets_file, head=T)
     peptide_sets <- peptide_sets[order(peptide_sets$gene), , drop=FALSE]
     gene_list <- sort(
@@ -61,8 +60,13 @@ psea <- function(
     )]
 
     outtable <- cbind(outtable_pre, all_tested_peptides)
-    species_name <- species[match(outtable[, "ID"], species[, 2]), 1]
-    outtable <- cbind(outtable, species_name)
+
+    if (species_file != "")
+    {
+        species <- read.csv(file=species_file, sep="\t", head=T)
+        species_name <- species[match(outtable[, "ID"], species[, 2]), 1]
+        outtable <- cbind(outtable, species_name)
+    }
 
     return(outtable)
 }

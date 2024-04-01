@@ -27,11 +27,11 @@ def make_psea_table(
         threshold,
         p_val_thresh=0.05,
         es_thresh=0.4,
-        species_taxa_file=None,
+        species_taxa_file="",
         min_size=15,
         max_size=2000,
         permutation_num=10000,  # as per original PSEA code
-        table_dir="./psea_table_dir",
+        table_dir="./table_dir",
         # True by default since Python implementation is still being developed
         r_ctrl=True,
         threads=4,
