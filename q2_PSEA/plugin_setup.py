@@ -34,7 +34,6 @@ plugin.pipelines.register_function(
         "max_size": Int,
         "permutation_num": Int,
         "table_dir": Str,
-        "r_ctrl": Bool,
         "threads": Int,
         "pepsirf_binary": Str
     },
@@ -42,11 +41,10 @@ plugin.pipelines.register_function(
         "scores_file": "Name of Z score matrix file.",
         "pairs_file": "Name of tab-delimited file containing pairs of"
             " sample names.",
-        "peptide_sets_file": "Name of file containing information about"
-            " species and their peptides. If `--p-r-ctrl` is False, the file"
-            " should be in GMT format; otherwise, the format should be CSV."
-            " Please refer to 'input.gmt' and 'input.csv' files in the"
-            " 'examples' directory for example files.",
+        "peptide_sets_file": "Name of GMT file containing information about"
+            " species and the peptides which are linked to them. Please refer"
+            " to 'input.gmt' in the 'examples' directory for an example of GMT"
+            " format.",
         "species_taxa_file": "Name of tab-delimited file containing species"
             " name and taxanomy ID associations.",
         "threshold": "Minimum Z score a peptide must maintain to be"
@@ -63,8 +61,6 @@ plugin.pipelines.register_function(
         "permutation_num": "Number of permutations. Minimal possible nominal"
             " p-value is about 1/perm.",
         "table_dir": "Directory where resulting PSEA tables will be stored.",
-        "r_ctrl": "Specifies to run PSEA using Python or R functions. If set"
-            " to True, then R functions will be used.",
         "threads": "Number of threads with which to run ssGSEA operation.",
         "pepsirf_binary": "Path to pepsirf binary."
     },

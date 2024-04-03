@@ -1,4 +1,3 @@
-# import gseapy as gp
 import numpy as np
 import os
 import pandas as pd
@@ -30,8 +29,6 @@ def make_psea_table(
         max_size=2000,
         permutation_num=10000,  # as per original PSEA code
         table_dir="./psea_table_dir",
-        # True by default since Python implementation is still being developed
-        r_ctrl=True,
         threads=4,
         pepsirf_binary="pepsirf"
 ):    
@@ -56,60 +53,58 @@ def make_psea_table(
 
     with tempfile.TemporaryDirectory() as tempdir:
         processed_scores.to_csv(f"{tempdir}/proc_scores.tsv", sep="\t")
+        processed_scores = utils.remove_peptides_in_csv_format(
+            processed_scores, peptide_sets_file
+        )
 
-        if r_ctrl:
-            processed_scores = utils.remove_peptides_in_csv_format(
-                processed_scores, peptide_sets_file
+        titles = []
+        taxa_access = "species_name"
+        p_val_thresholds = []
+        used_pairs = []
+        pair_spline_dict = {}
+        for pair in pairs:
+            print(f"Working on pair ({pair[0]}, {pair[1]})...")
+        
+            spline_tup = r_max_delta_by_spline(
+                processed_scores,
+                pair
+            )
+            maxZ = spline_tup[0]
+            deltaZ = spline_tup[1]
+            spline_x = np.array(spline_tup[2]["x"])
+            spline_y = np.array(spline_tup[2]["y"])
+            pair_spline_dict[pair[0]] = pd.Series(spline_x)
+            pair_spline_dict[pair[1]] = pd.Series(spline_y)
+            used_pairs.append(pair)
+
+            table = INTERNAL.psea(
+                maxZ,
+                deltaZ,
+                peptide_sets_file,
+                species_taxa_file,
+                threshold,
+                permutation_num,
+                min_size,
+                max_size
+            )
+            with (ro.default_converter + pandas2ri.converter).context():
+                table = ro.conversion.get_conversion().rpy2py(table)
+            # TODO: make consistent the column names from both R and Py
+            prefix = f"{pair[0]}~{pair[1]}"
+            table.to_csv(
+                f"{table_dir}/{prefix}_psea_table.tsv",
+                sep="\t", index=False
             )
 
-            titles = []
-            taxa_access = "species_name"
-            p_val_thresholds = []
-            used_pairs = []
-            pair_spline_dict = {}
-            for pair in pairs:
-                print(f"Working on pair ({pair[0]}, {pair[1]})...")
-            
-                spline_tup = r_max_delta_by_spline(
-                    processed_scores,
-                    pair
-                )
-                maxZ = spline_tup[0]
-                deltaZ = spline_tup[1]
-                spline_x = np.array(spline_tup[2]["x"])
-                spline_y = np.array(spline_tup[2]["y"])
-                pair_spline_dict[pair[0]] = pd.Series(spline_x)
-                pair_spline_dict[pair[1]] = pd.Series(spline_y)
-                used_pairs.append(pair)
+            if species_taxa_file:
+                taxa = table.loc[:, "species_name"].to_list()
+            else:
+                taxa = table.loc[:, "ID"].to_list()
+                taxa_access = "ID"
 
-                table = INTERNAL.psea(
-                    maxZ,
-                    deltaZ,
-                    peptide_sets_file,
-                    species_taxa_file,
-                    threshold,
-                    permutation_num,
-                    min_size,
-                    max_size
-                )
-                with (ro.default_converter + pandas2ri.converter).context():
-                    table = ro.conversion.get_conversion().rpy2py(table)
-                # TODO: make consistent the column names from both R and Py
-                prefix = f"{pair[0]}~{pair[1]}"
-                table.to_csv(
-                    f"{table_dir}/{prefix}_psea_table.tsv",
-                    sep="\t", index=False
-                )
+            p_val_thresholds.append(p_val_thresh / len(taxa))
 
-                if species_taxa_file:
-                    taxa = table.loc[:, "species_name"].to_list()
-                else:
-                    taxa = table.loc[:, "ID"].to_list()
-                    taxa_access = "ID"
-
-                p_val_thresholds.append(p_val_thresh / len(taxa))
-
-                titles.append(prefix)
+            titles.append(prefix)
 
             pd.DataFrame(used_pairs).to_csv(
                 f"{tempdir}/used_pairs.tsv", sep="\t",
@@ -118,41 +113,6 @@ def make_psea_table(
             pd.DataFrame(pair_spline_dict).to_csv(
                 f"{tempdir}/timepoint_spline_values.tsv", sep="\t", index=False
             )
-        else:
-            print(
-                "The '--p-r-ctrl' parameter has been unset, please set the"
-                " parameter to 'True' as PSEA using Python is still being"
-                " worked on."
-            )
-            # if out_table_name == "":
-            #     out_table_name = "py_table.tsv"
-
-            # processed_scores = remove_peptides_in_gmt_format(
-            #     processed_scores, peptide_sets_file
-            # )
-
-            # # TODO: reimplement loop to cover all defined pairs
-            # # run PSEA operation for current pair
-            # spline_tup = py_max_delta_by_spline(
-            #     processed_scores,
-            #     ["070060_D360.Pro_PV2T", "070060_D540.Pro_PV2T"]
-            # )
-            # maxZ = spline_tup[0]
-            # deltaZ = spline_tup[1]
-
-            # table = psea(
-            #     maxZ=maxZ,
-            #     deltaZ=deltaZ,
-            #     peptide_sets_file=peptide_sets_file,
-            #     species_taxa_file=species_taxa_file,
-            #     threshold=threshold,
-            #     min_size=min_size,
-            #     max_size=max_size,
-            #     permutation_num=permutation_num,
-            #     threads=threads,
-            #     outdir="table_outdir"
-            # )
-            # table.to_csv(out_table_name, sep="\t", index=False)
 
         processed_scores_art = ctx.make_artifact(
             type="FeatureTable[Zscore]",
