@@ -62,6 +62,17 @@ def generate_vis(
     with tempfile.TemporaryDirectory() as tempdir:
         processed_scores.to_csv(f"{tempdir}/proc_scores.tsv", sep="\t")
 
+        final_table_dict = {
+            "ID": list(),
+            "enrichmentScore": list(),
+            "NES": list(),
+            "p.adjust": list(),
+            "core_enrichment": list(),
+            "pvalue": list(),
+            "qvalue": list(),
+            "all_tested_peptides": list(),
+            "species_name": list()
+        }
         if r_ctrl:
             rread_gmt = ro.r["read.gmt"]
             processed_scores = utils.remove_peptides_in_gmt_format(
@@ -69,12 +80,17 @@ def generate_vis(
             )
             peptide_sets = rread_gmt(peptide_sets_file)
 
+            print(f"Peptide sets (type={type(peptide_sets)}) =\n{peptide_sets}")
+
             titles = []
-            taxa_access = "species_name"
             p_val_thresholds = []
             used_pairs = []
             pair_spline_dict = {}
-            tested_peptides = None
+            if species_taxa_file:
+                taxa_access = "species_name"
+            else:
+                taxa_access = "ID"
+
             for pair in pairs:
                 print(f"Working on pair ({pair[0]}, {pair[1]})...")
                 used_pairs.append(pair)
@@ -106,30 +122,58 @@ def generate_vis(
                     with (ro.default_converter
                             + pandas2ri.converter).context():
                         table = ro.conversion.get_conversion().rpy2py(table)
-                    # TODO: make consistent the column names from both R and Py
-                    table.to_csv(
-                        f"{table_dir}/{prefix}_psea_table.tsv",
-                        sep="\t", index=False
+
+                    # TODO: watch 070236
+                    # TODO: sort table to get the "top scoring" (lowest p-val,
+                    # then default to ES) virus
+                    table.sort_values(
+                        by=["pvalue", "enrichmentScore"],  # DOES NOT PUT THE BIGGEST ES AT THE TOP OF THE TABLE
+                        ascending=False,
+                        inplace=True
                     )
+                    # TODO: probably wrap in function
+                    # 1) sort by p-value -> new table
+                    # 2) sort by ES -> new table
+                    # 3) compare top species for both tables
+                    #     a1) if species is different
+                    #         b1) grab species from ES table
+                    #     a2) otherwise, species is the same
+                    #         c1) grab species from p-value table
+                    # TODO: find out how to make pandas do this
+                    table.to_csv(f"sorted_tables/{prefix}.tsv", sep="\t")
 
-                    es = table.loc[:, "enrichmentScore"]
-                    p_vals = table.loc[:, "pvalue"]
-                    tested_peptides = []
-                    for i in range(len(p_vals)):
-                        # TODO: watch 070236
-                        # TODO: sort table to get the "top scoring" (lowest p-val, then default to ES) virus
-                        if p_val_thresh < p_vals[i] and es_thresh < es[i]:
-                            # TODO: remove peptides from peptide set
-                            tested_peptides.extend(table.iloc[i, 7].split("/"))
-                        else:
-                            filter_peptides = False
-                    processed_scores.drop(index=tested_peptides)
+                    p_val = table.iloc[0, 5]
+                    es = table.iloc[0, 1]
+                    if p_val_thresh < p_val and es_thresh < es:
+                        tested_peptides = table.iloc[0, 7].split("/")
+                        # TODO: maybe I can have a global converter instead
+                        with (ro.default_converter
+                                + pandas2ri.converter).context():
+                            peptide_sets = utils.remove_peptides_from_set(peptide_sets, tested_peptides, table.index[0])
+                            peptide_sets = ro.conversion.get_conversion().py2rpy(peptide_sets)
+                            # TODO: make sure peptide_sets is the same type to pass to R
 
-                if species_taxa_file:
-                    taxa = table.loc[:, "species_name"].to_list()
-                else:
-                    taxa = table.loc[:, "ID"].to_list()
-                    taxa_access = "ID"
+                        final_table_dict["ID"].append(table.iloc[0, 0])
+                        final_table_dict["enrichmentScore"].append(table.iloc[0, 1])
+                        final_table_dict["NES"].append(table.iloc[0, 2])
+                        final_table_dict["p.adjust"].append(table.iloc[0, 3])
+                        final_table_dict["core_enrichment"].append(table.iloc[0, 4])
+                        final_table_dict["pvalue"].append(table.iloc[0, 5])
+                        final_table_dict["qvalue"].append(table.iloc[0, 6])
+                        final_table_dict["all_tested_peptides"].append(table.iloc[0, 7])
+                        final_table_dict["species_name"].append(table.iloc[0, 8])
+                        fnal
+                    else:
+                        # TODO: maybe a loop needs to check there are no more sig taxa
+                        filter_peptides = False
+                    # TODO: write remaining species to final table
+
+                # table = pd.DataFrame(final_table_dict)
+                pd.DataFrame(final_table_dict).to_csv(  # TODO: could all this go in a temp dir?
+                    f"{table_dir}/{prefix}_psea_table.tsv",
+                    sep="\t", index=False
+                )
+                taxa = table.loc[:, taxa_access].to_list()
 
                 p_val_thresholds.append(p_val_thresh / len(taxa))
 

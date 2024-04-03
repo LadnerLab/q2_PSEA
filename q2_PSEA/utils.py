@@ -97,3 +97,24 @@ def remove_peptides_in_csv_format(scores, peptide_sets_file) -> pd.DataFrame:
             pep_list.append(line[0])
     pep_list = scores.index.difference(pep_list)
     return scores.drop(index=pep_list)
+
+
+def remove_peptides_from_sets(sets: pd.DataFrame, remove, preserve) -> pd.DataFrame:
+    """Removes peptides from every species' set except for the one specified by
+    `preserve`
+
+    Returns
+    -------
+    pd.DataFrame
+        Contains remaining associates of peptides to species; peptides
+        previously associated with `preserve` will remain associated
+    """
+    print(f"Sets (type={type(sets)}) =\n{sets}")
+
+    drop_indices = []
+
+    for i in len(sets):
+        if sets.iloc[i, 0] in remove and sets.iloc[i, 1] != preserve:
+            drop_indices.append(i)
+    
+    return sets.drop(index=drop_indices)
