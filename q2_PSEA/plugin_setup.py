@@ -34,7 +34,7 @@ plugin.pipelines.register_function(
         "max_size": Int,
         "permutation_num": Int,
         "table_dir": Str,
-        "spline": List[Str],
+        "spline": Str,
         "threads": Int,
         "pepsirf_binary": Str
     },

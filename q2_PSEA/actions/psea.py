@@ -33,7 +33,7 @@ def make_psea_table(
         table_dir="./psea_table_outdir",
         # TODO: will expand and notion of an R- or Python-spline will be
         # infered by the plug-in
-        spline=["r", "py"],
+        spline="r",
         threads=4,
         pepsirf_binary="pepsirf"
 ):    
@@ -76,14 +76,22 @@ def make_psea_table(
         for pair in pairs:
             print(f"Working on pair ({pair[0]}, {pair[1]})...")
         
-            spline_tup = r_max_delta_by_spline(
-                processed_scores,
-                pair
-            )
+            if spline == "py":
+                spline_tup = py_max_delta_by_spline(
+                    processed_scores,
+                    pair
+                )
+                spline_x = np.array(spline_tup[2]["x"])
+                spline_y = np.array(spline_tup[2]["y"])
+            elif spline == "r":
+                spline_tup = r_max_delta_by_spline(
+                    processed_scores,
+                    pair
+                )
+                spline_x = np.array(spline_tup[2]["x"])
+                spline_y = np.array(spline_tup[2]["y"])
             maxZ = spline_tup[0]
             deltaZ = spline_tup[1]
-            spline_x = np.array(spline_tup[2]["x"])
-            spline_y = np.array(spline_tup[2]["y"])
             pair_spline_dict[pair[0]] = pd.Series(spline_x)
             pair_spline_dict[pair[1]] = pd.Series(spline_y)
             used_pairs.append(pair)
@@ -172,13 +180,15 @@ def py_max_delta_by_spline(data, timepoints) -> tuple:
     # tentative magic number 5 knots came from tutorial linked above
     smooth_spline = spline(5, y)
     deltaZ = y - smooth_spline(x)
+    spline_res  = { "y": [smooth_spline(coord) for coord in x], "x": x }
 
     maxZ = pd.Series(
         data=[num for elem in maxZ for num in elem],
         index=data.index
     )
     deltaZ = pd.Series(data=deltaZ, index=data.index)
-    return (maxZ, deltaZ)
+
+    return (maxZ, deltaZ, spline_res)
 
 
 def r_max_delta_by_spline(data, timepoints) -> tuple:
@@ -208,10 +218,10 @@ def r_max_delta_by_spline(data, timepoints) -> tuple:
         # to another function, an error is thrown explaining that py2rpy is not
         # defined for rpy2.rlike.containers.OrdDict; this must be revisted to
         # fix having to do the spline operation twice
-        spline = rsmooth_spline(
+        spline_res = rsmooth_spline(
             data.loc[:, timepoints[0]], data.loc[:, timepoints[1]]
         )
-        spline = dict(spline)
+        spline_res = dict(spline_res)
         deltaZ = INTERNAL.delta_by_spline(
             data.loc[:, timepoints[0]], data.loc[:, timepoints[1]]
         )
@@ -219,7 +229,7 @@ def r_max_delta_by_spline(data, timepoints) -> tuple:
     maxZ = pd.Series(data=maxZ, index=data.index.to_list())
     deltaZ = pd.Series(data=deltaZ, index=data.index.to_list())
 
-    return (maxZ, deltaZ, spline)
+    return (maxZ, deltaZ, spline_res)
 
 
 # TODO: maybe this is the best place to also load zscores to reduce memory
