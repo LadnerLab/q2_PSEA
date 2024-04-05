@@ -5,7 +5,7 @@ import q2_PSEA
 
 from q2_PSEA.actions.psea import make_psea_table
 from qiime2.plugin import (
-    Bool, Float, Int, Plugin, Str, Visualization
+    Bool, Float, Int, List, Plugin, Str, Visualization
 )
 
 
@@ -34,6 +34,7 @@ plugin.pipelines.register_function(
         "max_size": Int,
         "permutation_num": Int,
         "table_dir": Str,
+        "spline": List[Str],
         "threads": Int,
         "pepsirf_binary": Str
     },
@@ -61,6 +62,7 @@ plugin.pipelines.register_function(
         "permutation_num": "Number of permutations. Minimal possible nominal"
             " p-value is about 1/perm.",
         "table_dir": "Directory where resulting PSEA tables will be stored.",
+        "spline": "",
         "threads": "Number of threads with which to run ssGSEA operation.",
         "pepsirf_binary": "Path to pepsirf binary."
     },

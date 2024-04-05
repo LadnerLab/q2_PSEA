@@ -31,6 +31,9 @@ def make_psea_table(
         max_size=2000,
         permutation_num=10000,  # as per original PSEA code
         table_dir="./psea_table_outdir",
+        # TODO: will expand and notion of an R- or Python-spline will be
+        # infered by the plug-in
+        spline=["r", "py"],
         threads=4,
         pepsirf_binary="pepsirf"
 ):    
@@ -217,117 +220,6 @@ def r_max_delta_by_spline(data, timepoints) -> tuple:
     deltaZ = pd.Series(data=deltaZ, index=data.index.to_list())
 
     return (maxZ, deltaZ, spline)
-
-
-def psea(
-    maxZ: pd.Series,
-    deltaZ: pd.Series,
-    peptide_sets_file: str,
-    species_taxa_file: str,
-    threshold: float,
-    permutation_num: int = 0,
-    min_size: int = 15,
-    max_size: int = 500,
-    threads: int = 1,
-    outdir: str = None
-):
-    """Finds the intersection between peptides in `maxZ` with a value greater
-    than `threshold` and those in `deltaZ` which have a value not equal to 0
-
-    Parameters
-    ----------
-    maxZ : pd.Series
-
-    deltaZ : pd.Series
-
-    peptide_sets_file : str
-
-    species_taxa_file : str
-
-    threshold : float
-
-    min_size : int
-
-    max_size : int
-
-    threads : int
-
-    Returns
-    -------
-    SingleSampleGSEA
-        Containes the resulting table with information associating a sample
-        name (Name) to a Term, and the normalized and raw enrichment scores
-        for each Term
-    """
-    # grab indexes where condition is true
-    maxZ_above_thresh = np.where(maxZ > threshold)
-    deltaZ_not_zero = np.where(deltaZ != 0)
-
-    # create peptide list will
-    peptide_list = deltaZ.iloc[
-        np.intersect1d(maxZ_above_thresh, deltaZ_not_zero)
-    ].sort_values(ascending=False)
-
-    # TODO:
-    # 1) ask if `seed` needs to be set, and to what?
-    # 2) ask if `scale` should be True
-    # 3) ask if we want to pass output director to ssgsea
-    # 4) see about if plotting feature is useful and generates the plots we
-    # want (`no_plot`)
-    res = gp.ssgsea(
-        data=peptide_list,
-        gene_sets=peptide_sets_file,
-        sample_norm_method="custom",
-        correl_norm_type="rank",
-        outdir=outdir,
-        min_size=min_size,
-        max_size=max_size,
-        permutation_num=permutation_num,  # TODO: keep in mind this is here
-        # weight_score_type=1, # for earlier versions
-        weight=1,
-        threads=threads
-    )
-
-    # check that species names are important
-    if species_taxa_file is not None:
-        # grab result table and include "Name" column
-        pre_res = res.res2d.loc[:, [
-            "Name", "Term", "ES", "NES", "NOM p-val", "FDR q-val", "FWER p-val"
-        ]]
-        # grab species name to taxanomic ID mapping
-        species_tax_map = pd.read_csv(
-            species_taxa_file,
-            sep="\t",
-            header=None,
-            index_col=0
-        )
-        # match names in PSEA result table with taxanomic IDs
-        names = species_tax_map.index.to_list()
-        for i in range(species_tax_map.iloc[:, 0].size):
-            id = species_tax_map.iloc[i, 0]
-            pre_res["Name"][pre_res.Term == str(id)] = names[i]
-    # otherwise, assume species names are not important
-    else:
-        pre_res = res.res2d.loc[:, [
-            "Term", "ES", "NES", "NOM p-val", "FDR q-val", "FWER p-val"
-        ]]
-
-    # collect names of peptides with max z scores above threshold
-    maxZ_peptides = maxZ.index.to_list()
-    peps_above_thresh = []
-    for i in list(maxZ_above_thresh[0]):
-        peps_above_thresh.append(maxZ_peptides[i])
-    # collect peptides which have max z scores greater than `threshold`
-    tested_peps = res.res2d.loc[:, "Lead_genes"].apply(
-        # joins peptides in a semicolon (;) delimited string
-        lambda peps: ";".join(
-            [pep for pep in np.intersect1d(peps.split(";"), peps_above_thresh)]
-        )
-    )
-    # append tested peptides `pre_res`
-    pre_res.insert(len(pre_res.columns), "Tested Peptides", tested_peps.values)
-
-    return pre_res
 
 
 # TODO: maybe this is the best place to also load zscores to reduce memory
