@@ -30,6 +30,7 @@ def make_psea_table(
         min_size=15,
         max_size=2000,
         permutation_num=10000,  # as per original PSEA code
+        spline_type="r",
         table_dir="./psea_table_outdir",
         threads=4,
         pepsirf_binary="pepsirf"
@@ -73,10 +74,18 @@ def make_psea_table(
         for pair in pairs:
             print(f"Working on pair ({pair[0]}, {pair[1]})...")
         
-            spline_tup = r_max_delta_by_spline(
-                processed_scores,
-                pair
-            )
+            # TODO: figure out how to make this faster as the number of
+            # possibilities expand (i.e. switch)
+            if spline_type == "py":
+                spline_tup = py_max_delta_by_spline(
+                    processed_scores,
+                    pair
+                )
+            else:
+                spline_tup = r_max_delta_by_spline(
+                    processed_scores,
+                    pair
+                )
             maxZ = spline_tup[0]
             deltaZ = spline_tup[1]
             spline_x = np.array(spline_tup[2]["x"])
@@ -144,7 +153,12 @@ def make_psea_table(
     return scatter_plot, volcano_plot
 
 
-def py_max_delta_by_spline(data, timepoints) -> tuple:
+def py_max_delta_by_spline(
+    data,
+    timepoints,
+    knots=5,
+    s=0.788458  # default value taken from original R code
+) -> tuple:
     """Finds the maximum value between two samples, and calculates the
     difference in Z score for each peptide
 
@@ -153,7 +167,7 @@ def py_max_delta_by_spline(data, timepoints) -> tuple:
     data : pd.DataFrame
         Matrix of Z scores for sequence
 
-    pair : Tuple
+    timepoints : tuple
         Tuple pair of samples for which to run max spline
 
     Returns
@@ -164,18 +178,18 @@ def py_max_delta_by_spline(data, timepoints) -> tuple:
     """
     maxZ = np.apply_over_axes(np.max, data.loc[:, timepoints], 1)
 
-    y = data.loc[:, timepoints[0]].to_numpy()
-    x = data.loc[:, timepoints[1]].to_numpy()
-    # tentative magic number 5 knots came from tutorial linked above
-    smooth_spline = spline(5, y)
-    deltaZ = y - smooth_spline(x)
+    x = data.loc[:, timepoints[0]].sort_values().to_numpy()
+    y = data.loc[:, timepoints[1]].sort_values().to_numpy()
+    yfit = spline(x, y, knots, s)
+    deltaZ = y - yfit
+    spline_dict = { "x": x, "y": yfit }
 
     maxZ = pd.Series(
         data=[num for elem in maxZ for num in elem],
         index=data.index
     )
     deltaZ = pd.Series(data=deltaZ, index=data.index)
-    return (maxZ, deltaZ)
+    return (maxZ, deltaZ, spline_dict)
 
 
 def r_max_delta_by_spline(data, timepoints) -> tuple:
@@ -360,23 +374,25 @@ def process_scores(scores, pairs) -> pd.DataFrame:
     )
 
 
-def spline(knots, y):
-    """Creates spline object from which a prediction can be made based on given
-    y-values
-
+def spline(x, y, knots=3, s=0.788458):
+    """Returns predicted values of `y` based on the given `x` values
+    
     Parameters
     ----------
-    y : float array
+    x : list(float)
+
+    y : list(float)
+
+    knots : int
+
+    s : float
 
     Returns
     -------
-    BSpline
-        Spline object from which predictions can be made given a set of
-        x-values
+    list(float)
+        Predicted y value for every given x value
     """
-    x = range(0, len(y))
     x_new = np.linspace(0, 1, knots+2)[1:-1]
     q_knots = np.quantile(x, x_new)
-    # smoothing condition `s` from smooth.spline() in original R code
-    t, c, k = interpolate.splrep(x, y, t=q_knots, s=0.788458)
-    return interpolate.BSpline(t, c, k)
+    t, c, k = interpolate.splrep(x, y, t=q_knots, s=s)
+    return interpolate.BSpline(t, c, k)(x)
