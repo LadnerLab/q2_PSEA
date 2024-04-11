@@ -18,6 +18,9 @@ cluster_profiler = importr("clusterProfiler")
 pandas2ri.activate()
 
 
+SPLINE_TYPES = ["r", "py"]
+
+
 def make_psea_table(
         ctx,
         scores_file,
@@ -38,6 +41,8 @@ def make_psea_table(
     volcano = ctx.get_action("ps-plot", "volcano")
     zscatter = ctx.get_action("ps-plot", "zscatter")
 
+    assert spline_type in SPLINE_TYPES, f"'{spline_type}' is not a valid spline method!"
+
     if not os.path.exists(table_dir):
         os.mkdir(table_dir)
     else:
@@ -55,12 +60,12 @@ def make_psea_table(
     processed_scores = process_scores(scores, pairs)
 
     with tempfile.TemporaryDirectory() as tempdir:
-        rread_gmt = ro.r["read.gmt"]
+        read_gmtr = ro.r["read.gmt"]
         processed_scores.to_csv(f"{tempdir}/proc_scores.tsv", sep="\t")
         processed_scores = utils.remove_peptides_in_gmt_format(
             processed_scores, peptide_sets_file
         )
-        peptide_sets = rread_gmt(peptide_sets_file)
+        peptide_sets = read_gmtr(peptide_sets_file)
 
         titles = []
         taxa_access = "species_name"
@@ -157,7 +162,7 @@ def py_max_delta_by_spline(
     data,
     timepoints,
     knots=5,
-    s=0.788458  # default value taken from original R code
+    s=None
 ) -> tuple:
     """Finds the maximum value between two samples, and calculates the
     difference in Z score for each peptide
@@ -178,8 +183,10 @@ def py_max_delta_by_spline(
     """
     maxZ = np.apply_over_axes(np.max, data.loc[:, timepoints], 1)
 
-    x = data.loc[:, timepoints[0]].sort_values().to_numpy()
-    y = data.loc[:, timepoints[1]].sort_values().to_numpy()
+    data_sorted = data.sort_values(by=timepoints[0])
+
+    x = data_sorted.loc[:, timepoints[0]].to_numpy()
+    y = data_sorted.loc[:, timepoints[1]].to_numpy()
     yfit = spline(x, y, knots, s)
     deltaZ = y - yfit
     spline_dict = { "x": x, "y": yfit }
@@ -188,7 +195,7 @@ def py_max_delta_by_spline(
         data=[num for elem in maxZ for num in elem],
         index=data.index
     )
-    deltaZ = pd.Series(data=deltaZ, index=data.index)
+    deltaZ = pd.Series(data=deltaZ, index=data_sorted.index)
     return (maxZ, deltaZ, spline_dict)
 
 
