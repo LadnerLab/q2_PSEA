@@ -62,6 +62,7 @@ def make_psea_table(
         p_val_thresholds = []
         used_pairs = []
         pair_spline_dict = {}
+
         for pair in pairs:
             print(f"Working on pair ({pair[0]}, {pair[1]})...")
         
@@ -89,9 +90,35 @@ def make_psea_table(
             )
             with (ro.default_converter + pandas2ri.converter).context():
                 table = ro.conversion.get_conversion().rpy2py(table)
-            # TODO: make consistent the column names from both R and Py
             prefix = f"{pair[0]}~{pair[1]}"
-            table.to_csv(
+
+            # TODO: watch 070236
+            # TODO: sort table to get the "top scoring" (lowest p-val,
+            # then default to ES) virus
+            table.sort_values(
+                by=["pvalue", "enrichmentScore"],  # DOES NOT PUT THE BIGGEST ES AT THE TOP OF THE TABLE
+                ascending=False,
+                inplace=True
+            )
+            # TODO: probably wrap in function
+            # 1) sort by p-value -> new table
+            # 2) sort by ES -> new table
+            # 3) compare top species for both tables
+            #     a1) if species is different
+            #         b1) grab species from ES table
+            #     a2) otherwise, species is the same
+            #         c1) grab species from p-value table
+            # TODO: find out how to make pandas do this
+            table.to_csv(f"sorted_tables/{prefix}.tsv", sep="\t")
+
+            # perform iterative analysis (remove cross-reactive peptides)
+            table = peptide_iterative_analysis( table, p_val_thresh, es_thresh )
+
+            # final_table.to_csv( f"test_final_table_dir/{prefix}_psea_table_test.tsv", sep="\t", index=False )
+            
+
+            # TODO: make consistent the column names from both R and Py
+            table.to_csv(   #<-- use final_table_dict to test
                 f"{table_dir}/{prefix}_psea_table.tsv",
                 sep="\t", index=False
             )
@@ -378,3 +405,33 @@ def spline(knots, y):
     # smoothing condition `s` from smooth.spline() in original R code
     t, c, k = interpolate.splrep(x, y, t=q_knots, s=0.788458)
     return interpolate.BSpline(t, c, k)
+
+
+def peptide_iterative_analysis( df, p_val_thresh, es_thresh) -> pd.DataFrame:
+    species_dict = dict()
+    values_dict = dict()
+
+    # create dictionary with species ID as key and set of all tested peptides as value
+    # create another dictionary with same key and pval, and es as value
+    for index, row in df.iterrows():
+        species_dict[row["ID"]] = set(row["all_tested_peptides"].split("/"))
+        values_dict[row["ID"]] = ( row["pvalue"], row["enrichmentScore"] )
+
+    
+    for ID in species_dict.keys():
+        # test if petides are significant for that species
+        if values_dict[ID][0] < p_val_thresh and values_dict[ID][1] > es_thresh:
+            # remove significant peptides from species set
+            for other_ID in species_dict.keys():
+                if other_ID != ID:
+                    species_dict[other_ID] = species_dict[other_ID] - species_dict[ID]
+    
+    # TODO: turn "all_tested_peptides" value into "significant peptides", then make chart with new df
+    sig_species_table = pd.DataFrame([(k,"/".join(v)) for k,v in species_dict.items()], columns=[ "ID", "all_tested_peptides" ] )
+
+    sig_species_table = sig_species_table.set_index("ID")
+
+    df["all_tested_peptides"] = sig_species_table["all_tested_peptides"]
+
+    return df
+
