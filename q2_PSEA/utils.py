@@ -58,22 +58,6 @@ def save_taxa_leading_peps_file(
             )
 
 
-def remove_peptides(scores, peptide_sets_file, r_ctrl) -> pd.DataFrame:
-    """Removes peptides not present in peptide sets file from a matrix of
-    Zscores - this is a helper function to control the process based on the
-    user's choice to use Python or R for their analysis
-
-    Returns
-    -------
-    pd.DataFrame
-        Contains remaining peptides which were found in the peptide sets file
-    """
-    if r_ctrl:
-        return remove_peptides_in_csv_format(scores, peptide_sets_file)
-    else:
-        return remove_peptides_in_gmt_format(scores, peptide_sets_file)
-
-
 def remove_peptides_in_gmt_format(scores, peptide_sets_file) -> pd.DataFrame:
     """Removes peptides not present in GMT formatted file from a matrix of
     Zscores
