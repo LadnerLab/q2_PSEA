@@ -8,11 +8,13 @@ import tempfile
 
 from math import isnan, log, pow
 from rpy2.robjects import pandas2ri
+from rpy2.robjects.packages import importr
 from scipy import interpolate
 from q2_pepsirf.format_types import PepsirfContingencyTSVFormat
 from q2_PSEA.actions.r_functions import INTERNAL
 
 
+cluster_profiler = importr("clusterProfiler")
 pandas2ri.activate()
 
 
@@ -24,11 +26,11 @@ def make_psea_table(
         threshold,
         p_val_thresh=0.05,
         es_thresh=0.4,
-        species_taxa_file=None,
+        species_taxa_file="",
         min_size=15,
         max_size=2000,
         permutation_num=10000,  # as per original PSEA code
-        table_dir="./psea_table_dir",
+        table_dir="./psea_table_outdir",
         threads=4,
         pepsirf_binary="pepsirf"
 ):    
@@ -52,16 +54,22 @@ def make_psea_table(
     processed_scores = process_scores(scores, pairs)
 
     with tempfile.TemporaryDirectory() as tempdir:
+        rread_gmt = ro.r["read.gmt"]
         processed_scores.to_csv(f"{tempdir}/proc_scores.tsv", sep="\t")
-        processed_scores = utils.remove_peptides_in_csv_format(
+        processed_scores = utils.remove_peptides_in_gmt_format(
             processed_scores, peptide_sets_file
         )
+        peptide_sets = rread_gmt(peptide_sets_file)
 
         titles = []
         taxa_access = "species_name"
         p_val_thresholds = []
         used_pairs = []
         pair_spline_dict = {}
+
+        if not species_taxa_file:
+            taxa_access = "ID"
+
         for pair in pairs:
             print(f"Working on pair ({pair[0]}, {pair[1]})...")
         
@@ -80,7 +88,7 @@ def make_psea_table(
             table = INTERNAL.psea(
                 maxZ,
                 deltaZ,
-                peptide_sets_file,
+                peptide_sets,
                 species_taxa_file,
                 threshold,
                 permutation_num,
@@ -89,19 +97,13 @@ def make_psea_table(
             )
             with (ro.default_converter + pandas2ri.converter).context():
                 table = ro.conversion.get_conversion().rpy2py(table)
-            # TODO: make consistent the column names from both R and Py
             prefix = f"{pair[0]}~{pair[1]}"
             table.to_csv(
                 f"{table_dir}/{prefix}_psea_table.tsv",
                 sep="\t", index=False
             )
 
-            if species_taxa_file:
-                taxa = table.loc[:, "species_name"].to_list()
-            else:
-                taxa = table.loc[:, "ID"].to_list()
-                taxa_access = "ID"
-
+            taxa = table.loc[:, taxa_access].to_list()
             p_val_thresholds.append(p_val_thresh / len(taxa))
 
             titles.append(prefix)
