@@ -67,12 +67,9 @@ def make_psea_table(
         used_pairs = []
         pair_spline_dict = {}
 
-<<<<<<< HEAD
-=======
         if not species_taxa_file:
             taxa_access = "ID"
 
->>>>>>> main
         for pair in pairs:
             print(f"Working on pair ({pair[0]}, {pair[1]})...")
         
