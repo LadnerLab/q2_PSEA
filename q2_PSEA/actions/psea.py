@@ -69,7 +69,6 @@ def make_psea_table(
 
         titles = []
         taxa_access = "species_name"
-        p_val_thresholds = []
         used_pairs = []
         pair_spline_dict = {}
 
@@ -122,7 +121,6 @@ def make_psea_table(
             )
 
             taxa = table.loc[:, taxa_access].to_list()
-            p_val_thresholds.append(p_val_thresh / len(taxa))
 
             titles.append(prefix)
 
@@ -145,7 +143,7 @@ def make_psea_table(
             pairs_file=f"{tempdir}/used_pairs.tsv",
             spline_file=f"{tempdir}/timepoint_spline_values.tsv",
             highlight_data=table_dir,
-            highlight_thresholds=p_val_thresholds,
+            highlight_thresholds=[p_val_thresh],
             species_taxa_file=species_taxa_file
         )
 
@@ -154,7 +152,7 @@ def make_psea_table(
             xy_access=["NES", "p.adjust"],
             taxa_access=taxa_access,
             x_threshold=es_thresh,
-            y_thresholds=p_val_thresholds,
+            y_thresholds=[p_val_thresh],
             xy_labels=["Enrichment score", "Adjusted p-values"],
             titles=titles
         )
