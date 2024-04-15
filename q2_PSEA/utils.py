@@ -1,5 +1,13 @@
 import pandas as pd
+import rpy2.robjects as ro
 import qiime2
+
+from rpy2.robjects import pandas2ri
+from rpy2.robjects.packages import importr
+
+
+cluster_profiler = importr("clusterProfiler")
+pandas2ri.activate()
 
 
 def generate_metadata(replicates):
@@ -58,42 +66,70 @@ def save_taxa_leading_peps_file(
             )
 
 
+def remove_peptides_in_csv_format(
+        scores,
+        peptide_sets_file
+) -> (pd.DataFrame, pd.DataFrame):
+    """Removes peptides not present in CSV formatted sets file from a matrix of
+    Z scores
+
+    Returns
+    -------
+    pd.DataFrame
+        Contains remaining peptides which were found in the peptide sets file
+    """
+    peptide_sets = pd.read_csv(peptide_sets_file, sep=",")
+    pep_list = scores.index.difference(peptide_sets.loc[:, "gene"])
+    return scores.drop(index=pep_list), peptide_sets
+
+
 def remove_peptides_in_gmt_format(scores, peptide_sets_file) -> pd.DataFrame:
-    """Removes peptides not present in GMT formatted file from a matrix of
-    Zscores
+    """Removes peptides not present in GMT formatted sets file from a matrix of
+    Z scores
 
     Returns
     -------
     pd.DataFrame
         Contains remaining peptides which were found in the peptide sets file
     """
-    pep_list = []
-    # TODO: maybe I can pull this info out and pass to ssgsea instead of the
-    # file name
-    with open(peptide_sets_file, "r") as fh:
-        lines = [line.replace("\n", "").split("\t") for line in fh.readlines()]
-        for line in lines:
-            line.pop(0)
-            for pep in line:
-                pep_list.append(pep)
-    pep_list = scores.index.difference(pep_list)
-    return scores.drop(index=pep_list)
+    read_gmtr = ro.r["read.gmt"]
+    with (ro.default_converter + pandas2ri.converter).context():
+        peptide_sets = read_gmtr(peptide_sets_file)  # TODO: feel like it's faster to write our own...
+    pep_list = scores.index.difference(peptide_sets.loc[:, "gene"])
+    return scores.drop(index=pep_list), peptide_sets
 
 
-def remove_peptides_in_csv_format(scores, peptide_sets_file) -> pd.DataFrame:
-    """Removes peptides not present in CSV formatted file from a matrix of
-    Zscores
+def remove_peptides_in_tsv_format(scores, peptide_sets_file) -> pd.DataFrame:
+    """Removes peptide not present in TSV formatted sets file from a matrix of
+    Z scores
 
     Returns
     -------
     pd.DataFrame
         Contains remaining peptides which were found in the peptide sets file
     """
-    pep_list = []
-    with open(peptide_sets_file, "r") as fh:
-        lines = [line.replace("\n", "").split(",") for line in fh.readlines()]
-        lines.pop(0)
-        for line in lines:
-            pep_list.append(line[0])
-    pep_list = scores.index.difference(pep_list)
-    return scores.drop(index=pep_list)
+    peptide_sets = pd.read_csv(peptide_sets_file, sep="\t")
+    pep_list = scores.index.difference(peptide_sets.loc[:, "gene"])
+    return scores.drop(index=pep_list), peptide_sets
+
+
+def remove_peptides(scores, peptide_sets_file) -> (pd.DataFrame, pd.DataFrame):
+    """Provides an interface to abstract support for TSV, CSV, and GMT file
+    formats
+
+    Notes
+    -----
+    * TSV and CSV file formats are basically the same but use tabs and commas,
+      respectively
+    
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame from processing
+    """
+    if "csv" in peptide_sets_file:
+        return remove_peptides_in_csv_format(scores, peptide_sets_file)
+    elif "gmt" in peptide_sets_file:
+        return remove_peptides_in_gmt_format(scores, peptide_sets_file)
+    elif "tsv" in peptide_sets_file:
+        return remove_peptides_in_tsv_format(scores, peptide_sets_file)
