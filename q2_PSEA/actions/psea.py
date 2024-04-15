@@ -18,6 +18,9 @@ cluster_profiler = importr("clusterProfiler")
 pandas2ri.activate()
 
 
+SPLINE_TYPES = ["r", "py"]
+
+
 def make_psea_table(
         ctx,
         scores_file,
@@ -30,12 +33,15 @@ def make_psea_table(
         min_size=15,
         max_size=2000,
         permutation_num=10000,  # as per original PSEA code
+        spline_type="r",
         table_dir="./psea_table_outdir",
         threads=4,
         pepsirf_binary="pepsirf"
 ):    
     volcano = ctx.get_action("ps-plot", "volcano")
     zscatter = ctx.get_action("ps-plot", "zscatter")
+
+    assert spline_type in SPLINE_TYPES, f"'{spline_type}' is not a valid spline method!"
 
     if not os.path.exists(table_dir):
         os.mkdir(table_dir)
@@ -54,12 +60,12 @@ def make_psea_table(
     processed_scores = process_scores(scores, pairs)
 
     with tempfile.TemporaryDirectory() as tempdir:
-        rread_gmt = ro.r["read.gmt"]
+        read_gmtr = ro.r["read.gmt"]
         processed_scores.to_csv(f"{tempdir}/proc_scores.tsv", sep="\t")
         processed_scores = utils.remove_peptides_in_gmt_format(
             processed_scores, peptide_sets_file
         )
-        peptide_sets = rread_gmt(peptide_sets_file)
+        peptide_sets = read_gmtr(peptide_sets_file)
 
         titles = []
         taxa_access = "species_name"
@@ -73,14 +79,26 @@ def make_psea_table(
         for pair in pairs:
             print(f"Working on pair ({pair[0]}, {pair[1]})...")
         
-            spline_tup = r_max_delta_by_spline(
-                processed_scores,
-                pair
+            # TODO: figure out how to make this faster as the number of
+            # possibilities expand (i.e. switch)
+            if spline_type == "py":
+                spline_tup = py_delta_by_spline(
+                    processed_scores,
+                    pair
+                )
+            else:
+                spline_tup = r_delta_by_spline(
+                    processed_scores,
+                    pair
+                )
+            maxZ = np.apply_over_axes(
+                np.max,
+                processed_scores.loc[:, [pair[0], pair[1]]],
+                1
             )
-            maxZ = spline_tup[0]
-            deltaZ = spline_tup[1]
-            spline_x = np.array(spline_tup[2]["x"])
-            spline_y = np.array(spline_tup[2]["y"])
+            deltaZ = spline_tup[0]
+            spline_x = np.array(spline_tup[1]["x"])
+            spline_y = np.array(spline_tup[1]["y"])
             pair_spline_dict[pair[0]] = pd.Series(spline_x)
             pair_spline_dict[pair[1]] = pd.Series(spline_y)
             used_pairs.append(pair)
@@ -144,7 +162,12 @@ def make_psea_table(
     return scatter_plot, volcano_plot
 
 
-def py_max_delta_by_spline(data, timepoints) -> tuple:
+def py_delta_by_spline(
+    data,
+    timepoints,
+    knots=5,
+    s=None
+) -> tuple:
     """Finds the maximum value between two samples, and calculates the
     difference in Z score for each peptide
 
@@ -153,7 +176,7 @@ def py_max_delta_by_spline(data, timepoints) -> tuple:
     data : pd.DataFrame
         Matrix of Z scores for sequence
 
-    pair : Tuple
+    timepoints : tuple
         Tuple pair of samples for which to run max spline
 
     Returns
@@ -162,23 +185,19 @@ def py_max_delta_by_spline(data, timepoints) -> tuple:
         Contains maximum Z score, the difference (delta) in actual from
         predicted Z scores, the spline values for x and y
     """
-    maxZ = np.apply_over_axes(np.max, data.loc[:, timepoints], 1)
+    data_sorted = data.sort_values(by=timepoints[0])
 
-    y = data.loc[:, timepoints[0]].to_numpy()
-    x = data.loc[:, timepoints[1]].to_numpy()
-    # tentative magic number 5 knots came from tutorial linked above
-    smooth_spline = spline(5, y)
-    deltaZ = y - smooth_spline(x)
+    x = data_sorted.loc[:, timepoints[0]].to_numpy()
+    y = data_sorted.loc[:, timepoints[1]].to_numpy()
+    yfit = spline(x, y, knots, s)
+    deltaZ = y - yfit
+    spline_dict = { "x": x, "y": yfit }
 
-    maxZ = pd.Series(
-        data=[num for elem in maxZ for num in elem],
-        index=data.index
-    )
-    deltaZ = pd.Series(data=deltaZ, index=data.index)
-    return (maxZ, deltaZ)
+    deltaZ = pd.Series(data=deltaZ, index=data_sorted.index).sort_index()
+    return (deltaZ, spline_dict)
 
 
-def r_max_delta_by_spline(data, timepoints) -> tuple:
+def r_delta_by_spline(data, timepoints) -> tuple:
     """Uses R functions to find the maximum Z score between two points in time,
     and to calculate spline for time points and the delta
 
@@ -200,7 +219,6 @@ def r_max_delta_by_spline(data, timepoints) -> tuple:
     rsmooth_spline = ro.r["smooth.spline"]
 
     with (ro.default_converter + pandas2ri.converter).context():
-        maxZ = rapply(data.loc[:, timepoints], 1, "max")
         # TODO: `spline` object ends up coming back as an OrdDict; when passed
         # to another function, an error is thrown explaining that py2rpy is not
         # defined for rpy2.rlike.containers.OrdDict; this must be revisted to
@@ -213,10 +231,8 @@ def r_max_delta_by_spline(data, timepoints) -> tuple:
             data.loc[:, timepoints[0]], data.loc[:, timepoints[1]]
         )
 
-    maxZ = pd.Series(data=maxZ, index=data.index.to_list())
     deltaZ = pd.Series(data=deltaZ, index=data.index.to_list())
-
-    return (maxZ, deltaZ, spline)
+    return (deltaZ, spline)
 
 
 def psea(
@@ -360,23 +376,25 @@ def process_scores(scores, pairs) -> pd.DataFrame:
     )
 
 
-def spline(knots, y):
-    """Creates spline object from which a prediction can be made based on given
-    y-values
-
+def spline(x, y, knots=3, s=0.788458):
+    """Returns predicted values of `y` based on the given `x` values
+    
     Parameters
     ----------
-    y : float array
+    x : list(float)
+
+    y : list(float)
+
+    knots : int
+
+    s : float
 
     Returns
     -------
-    BSpline
-        Spline object from which predictions can be made given a set of
-        x-values
+    list(float)
+        Predicted y value for every given x value
     """
-    x = range(0, len(y))
     x_new = np.linspace(0, 1, knots+2)[1:-1]
     q_knots = np.quantile(x, x_new)
-    # smoothing condition `s` from smooth.spline() in original R code
-    t, c, k = interpolate.splrep(x, y, t=q_knots, s=0.788458)
-    return interpolate.BSpline(t, c, k)
+    t, c, k = interpolate.splrep(x, y, t=q_knots, s=s)
+    return interpolate.BSpline(t, c, k)(x)
