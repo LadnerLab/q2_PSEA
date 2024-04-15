@@ -113,6 +113,13 @@ def remove_peptides_in_tsv_format(scores, peptide_sets_file) -> pd.DataFrame:
     return scores.drop(index=pep_list), peptide_sets
 
 
+REMOVE_PEPTIDES_SWITCH = {
+    "csv": remove_peptides_in_csv_format,
+    "gmt": remove_peptides_in_gmt_format,
+    "tsv": remove_peptides_in_tsv_format,
+}
+
+
 def remove_peptides(scores, peptide_sets_file) -> (pd.DataFrame, pd.DataFrame):
     """Provides an interface to abstract support for TSV, CSV, and GMT file
     formats
@@ -127,9 +134,7 @@ def remove_peptides(scores, peptide_sets_file) -> (pd.DataFrame, pd.DataFrame):
     pd.DataFrame
         DataFrame from processing
     """
-    if "csv" in peptide_sets_file:
-        return remove_peptides_in_csv_format(scores, peptide_sets_file)
-    elif "gmt" in peptide_sets_file:
-        return remove_peptides_in_gmt_format(scores, peptide_sets_file)
-    elif "tsv" in peptide_sets_file:
-        return remove_peptides_in_tsv_format(scores, peptide_sets_file)
+    format = peptide_sets_file.split(".")[1]
+    assert format in list(REMOVE_PEPTIDES_SWITCH), \
+        f"'{format}' is not a supported format for the peptide sets file!"
+    return REMOVE_PEPTIDES_SWITCH[format](scores, peptide_sets_file)
