@@ -82,19 +82,23 @@ def make_psea_table(
             # TODO: figure out how to make this faster as the number of
             # possibilities expand (i.e. switch)
             if spline_type == "py":
-                spline_tup = py_max_delta_by_spline(
+                spline_tup = py_delta_by_spline(
                     processed_scores,
                     pair
                 )
             else:
-                spline_tup = r_max_delta_by_spline(
+                spline_tup = r_delta_by_spline(
                     processed_scores,
                     pair
                 )
-            maxZ = spline_tup[0]
-            deltaZ = spline_tup[1]
-            spline_x = np.array(spline_tup[2]["x"])
-            spline_y = np.array(spline_tup[2]["y"])
+            maxZ = np.apply_over_axes(
+                np.max,
+                processed_scores.loc[:, [pair[0], pair[1]]],
+                1
+            )
+            deltaZ = spline_tup[0]
+            spline_x = np.array(spline_tup[1]["x"])
+            spline_y = np.array(spline_tup[1]["y"])
             pair_spline_dict[pair[0]] = pd.Series(spline_x)
             pair_spline_dict[pair[1]] = pd.Series(spline_y)
             used_pairs.append(pair)
@@ -158,7 +162,7 @@ def make_psea_table(
     return scatter_plot, volcano_plot
 
 
-def py_max_delta_by_spline(
+def py_delta_by_spline(
     data,
     timepoints,
     knots=5,
@@ -181,8 +185,6 @@ def py_max_delta_by_spline(
         Contains maximum Z score, the difference (delta) in actual from
         predicted Z scores, the spline values for x and y
     """
-    maxZ = np.apply_over_axes(np.max, data.loc[:, timepoints], 1)
-
     data_sorted = data.sort_values(by=timepoints[0])
 
     x = data_sorted.loc[:, timepoints[0]].to_numpy()
@@ -191,15 +193,11 @@ def py_max_delta_by_spline(
     deltaZ = y - yfit
     spline_dict = { "x": x, "y": yfit }
 
-    maxZ = pd.Series(
-        data=[num for elem in maxZ for num in elem],
-        index=data.index
-    )
-    deltaZ = pd.Series(data=deltaZ, index=data_sorted.index)
-    return (maxZ, deltaZ, spline_dict)
+    deltaZ = pd.Series(data=deltaZ, index=data_sorted.index).sort_index()
+    return (deltaZ, spline_dict)
 
 
-def r_max_delta_by_spline(data, timepoints) -> tuple:
+def r_delta_by_spline(data, timepoints) -> tuple:
     """Uses R functions to find the maximum Z score between two points in time,
     and to calculate spline for time points and the delta
 
@@ -221,7 +219,6 @@ def r_max_delta_by_spline(data, timepoints) -> tuple:
     rsmooth_spline = ro.r["smooth.spline"]
 
     with (ro.default_converter + pandas2ri.converter).context():
-        maxZ = rapply(data.loc[:, timepoints], 1, "max")
         # TODO: `spline` object ends up coming back as an OrdDict; when passed
         # to another function, an error is thrown explaining that py2rpy is not
         # defined for rpy2.rlike.containers.OrdDict; this must be revisted to
@@ -234,10 +231,8 @@ def r_max_delta_by_spline(data, timepoints) -> tuple:
             data.loc[:, timepoints[0]], data.loc[:, timepoints[1]]
         )
 
-    maxZ = pd.Series(data=maxZ, index=data.index.to_list())
     deltaZ = pd.Series(data=deltaZ, index=data.index.to_list())
-
-    return (maxZ, deltaZ, spline)
+    return (deltaZ, spline)
 
 
 def psea(
