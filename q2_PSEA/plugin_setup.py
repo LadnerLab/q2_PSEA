@@ -3,7 +3,7 @@
 import q2_PSEA
 
 
-from q2_PSEA.actions.psea import make_psea_table
+from q2_PSEA.actions.psea import generate_vis
 from qiime2.plugin import (
     Bool, Float, Int, Plugin, Str, Visualization
 )
@@ -19,7 +19,7 @@ plugin = Plugin(
 
 # register make_psea_table function
 plugin.pipelines.register_function(
-    function=make_psea_table,
+    function=generate_vis,
     inputs={},
     input_descriptions=None,
     parameters={

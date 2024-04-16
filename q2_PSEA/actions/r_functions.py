@@ -24,7 +24,6 @@ psea <- function(
         max_size
 ) {
     library(clusterProfiler)
-    # peptide_sets = read.csv(file=peptide_sets_file, head=T)
     peptide_sets <- peptide_sets[order(peptide_sets$gene), , drop=FALSE]
     gene_list <- sort(
         deltaZ[intersect(which(maxZ > threshold), which(deltaZ != 0))],
