@@ -54,12 +54,10 @@ def make_psea_table(
     processed_scores = process_scores(scores, pairs)
 
     with tempfile.TemporaryDirectory() as tempdir:
-        read_gmtr = ro.r["read.gmt"]
         processed_scores.to_csv(f"{tempdir}/proc_scores.tsv", sep="\t")
-        processed_scores = utils.remove_peptides_in_gmt_format(
+        processed_scores, peptide_sets = utils.remove_peptides(
             processed_scores, peptide_sets_file
         )
-        peptide_sets = read_gmtr(peptide_sets_file)
 
         titles = []
         taxa_access = "species_name"
