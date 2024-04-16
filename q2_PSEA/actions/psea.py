@@ -12,13 +12,14 @@ from rpy2.robjects.packages import importr
 from scipy import interpolate
 from q2_pepsirf.format_types import PepsirfContingencyTSVFormat
 from q2_PSEA.actions.r_functions import INTERNAL
+from q2_PSEA.actions.splines import R_SPLINES
 
 
-cluster_profiler = importr("clusterProfiler")
+r_cluster_profiler = importr("clusterProfiler")
 pandas2ri.activate()
 
 
-SPLINE_TYPES = ["r", "py"]
+SPLINE_TYPES = ["r_smooth", "py_smooth", "cubic"]
 
 
 def make_psea_table(
@@ -77,29 +78,28 @@ def make_psea_table(
 
         for pair in pairs:
             print(f"Working on pair ({pair[0]}, {pair[1]})...")
-        
-            # TODO: figure out how to make this faster as the number of
-            # possibilities expand (i.e. switch)
-            if spline_type == "py":
-                spline_tup = py_delta_by_spline(
-                    processed_scores,
-                    pair
-                )
+            data_sorted = processed_scores.loc[:, pair].sort_values(by=pair[0])
+            x = data_sorted.loc[:, pair[0]].to_numpy()
+            y = data_sorted.loc[:, pair[1]].to_numpy()
+
+            # TODO: optimize with a dictionary, if possible
+            if spline_type == "py_smooth":
+                yfit = py_smooth_spline(x, y)
+            elif spline_type == "cubic":
+                yfit = R_SPLINES.cubic_spline(x, y)  # TODO: might have to resort `yfit`
             else:
-                spline_tup = r_delta_by_spline(
-                    processed_scores,
-                    pair
-                )
+                yfit = R_SPLINES.r_smooth_spline(x, y)
+
             maxZ = np.apply_over_axes(
                 np.max,
                 processed_scores.loc[:, [pair[0], pair[1]]],
                 1
             )
-            deltaZ = spline_tup[0]
-            spline_x = np.array(spline_tup[1]["x"])
-            spline_y = np.array(spline_tup[1]["y"])
-            pair_spline_dict[pair[0]] = pd.Series(spline_x)
-            pair_spline_dict[pair[1]] = pd.Series(spline_y)
+            deltaZ = pd.Series(
+                data=y - yfit, index=data_sorted.index
+            ).sort_index()
+            pair_spline_dict[pair[0]] = pd.Series(x)
+            pair_spline_dict[pair[1]] = pd.Series(yfit)  # TODO: might not hold true for 'r_smooth_spline'
             used_pairs.append(pair)
 
             table = INTERNAL.psea(
@@ -158,79 +158,6 @@ def make_psea_table(
         )
 
     return scatter_plot, volcano_plot
-
-
-def py_delta_by_spline(
-    data,
-    timepoints,
-    knots=5,
-    s=None
-) -> tuple:
-    """Finds the maximum value between two samples, and calculates the
-    difference in Z score for each peptide
-
-    Parameters
-    ----------
-    data : pd.DataFrame
-        Matrix of Z scores for sequence
-
-    timepoints : tuple
-        Tuple pair of samples for which to run max spline
-
-    Returns
-    -------
-    tuple
-        Contains maximum Z score, the difference (delta) in actual from
-        predicted Z scores, the spline values for x and y
-    """
-    data_sorted = data.sort_values(by=timepoints[0])
-
-    x = data_sorted.loc[:, timepoints[0]].to_numpy()
-    y = data_sorted.loc[:, timepoints[1]].to_numpy()
-    yfit = spline(x, y, knots, s)
-    deltaZ = y - yfit
-    spline_dict = { "x": x, "y": yfit }
-
-    deltaZ = pd.Series(data=deltaZ, index=data_sorted.index).sort_index()
-    return (deltaZ, spline_dict)
-
-
-def r_delta_by_spline(data, timepoints) -> tuple:
-    """Uses R functions to find the maximum Z score between two points in time,
-    and to calculate spline for time points and the delta
-
-    Parameters
-    ----------
-    data : pd.DataFrame
-        Matrix of Z scores for sequence
-
-    pair : Tuple
-        Tuple pair of samples for which to run max spline
-
-    Returns
-    -------
-    tuple
-        Contains maximum Z score and the difference (delta) in actual from
-        predicted Z scores
-    """
-    rapply = ro.r["apply"]
-    rsmooth_spline = ro.r["smooth.spline"]
-
-    with (ro.default_converter + pandas2ri.converter).context():
-        # TODO: `spline` object ends up coming back as an OrdDict; when passed
-        # to another function, an error is thrown explaining that py2rpy is not
-        # defined for rpy2.rlike.containers.OrdDict; this must be revisted to
-        # fix having to do the spline operation twice
-        spline = rsmooth_spline(
-            data.loc[:, timepoints[0]], data.loc[:, timepoints[1]]
-        )
-        spline = dict(spline)
-        deltaZ = INTERNAL.delta_by_spline(
-            data.loc[:, timepoints[0]], data.loc[:, timepoints[1]]
-        )
-
-    deltaZ = pd.Series(data=deltaZ, index=data.index.to_list())
-    return (deltaZ, spline)
 
 
 def psea(
@@ -374,7 +301,8 @@ def process_scores(scores, pairs) -> pd.DataFrame:
     )
 
 
-def spline(x, y, knots=3, s=0.788458):
+# TODO: move into `splines.py`
+def py_smooth_spline(x, y, knots=3, s=0.788458):
     """Returns predicted values of `y` based on the given `x` values
     
     Parameters
