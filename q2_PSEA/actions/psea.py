@@ -14,7 +14,6 @@ from q2_pepsirf.format_types import PepsirfContingencyTSVFormat
 from q2_PSEA.actions.r_functions import INTERNAL
 
 
-r_cluster_profiler = importr("clusterProfiler")
 pandas2ri.activate()
 
 
@@ -90,7 +89,7 @@ def make_psea_table(
                 data=y - yfit, index=data_sorted.index
             ).sort_index()
             pair_spline_dict[pair[0]] = pd.Series(x)
-            pair_spline_dict[pair[1]] = pd.Series(yfit)  # TODO: might not hold true for 'r_smooth_spline'
+            pair_spline_dict[pair[1]] = pd.Series(yfit)
             used_pairs.append(pair)
 
             table = INTERNAL.psea(
