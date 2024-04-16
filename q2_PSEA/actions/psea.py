@@ -135,10 +135,9 @@ def make_psea_table(
             # TODO: find out how to make pandas do this
             table.to_csv(f"sorted_tables/{prefix}.tsv", sep="\t")
 
+
             # perform iterative analysis (remove cross-reactive peptides)
             table = peptide_iterative_analysis( table, p_val_thresh, es_thresh )
-
-            # final_table.to_csv( f"test_final_table_dir/{prefix}_psea_table_test.tsv", sep="\t", index=False )
             
 
             # TODO: make consistent the column names from both R and Py
