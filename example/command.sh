@@ -6,6 +6,5 @@ qiime psea make-psea-table --p-scores-file example/IM0031_PV2T_25nt_raw_2mm_i1mm
 --p-min-size 3 \
 --p-max-size 5000 \
 --p-permutation-num 10000 \
---p-threads 4 \
 --p-table-dir psea-example-tables \
 --output-dir psea-example-outdir

@@ -43,7 +43,7 @@ smooth_spline <- function(x, y)
 }
 
 
-cubic_spline <- function(x, y)
+cubic_spline <- function(x, y, degree, df)
 {
     library(splines2)
 
@@ -54,8 +54,8 @@ cubic_spline <- function(x, y)
     bsMat <- bSpline(
         x,
         knots = knots,
-        degree = 3,  # TODO: should the user have a chance to change this?
-        df = 7,  # TODO: should the user have a chance to change this?
+        degree = degree,
+        df = df,
         intercept = TRUE
     )
 

@@ -30,8 +30,9 @@ def make_psea_table(
         max_size=2000,
         permutation_num=10000,  # as per original PSEA code
         spline_type="r",
+        degree=3,
+        df=None,
         table_dir="./psea_table_outdir",
-        threads=4,
         pepsirf_binary="pepsirf"
 ):    
     volcano = ctx.get_action("ps-plot", "volcano")
@@ -63,6 +64,8 @@ def make_psea_table(
         used_pairs = []
         pair_spline_dict = {}
 
+        if not df:
+            df = ro.NULL
         if not species_taxa_file:
             taxa_access = "ID"
 
@@ -76,7 +79,7 @@ def make_psea_table(
             if spline_type == "py-smooth":
                 yfit = splines.smooth_spline(x, y)
             elif spline_type == "cubic":
-                yfit = splines.R_SPLINES.cubic_spline(x, y)
+                yfit = splines.R_SPLINES.cubic_spline(x, y, degree, df)
             else:
                 yfit = splines.R_SPLINES.smooth_spline(x, y)
 
