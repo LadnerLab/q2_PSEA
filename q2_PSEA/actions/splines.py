@@ -48,7 +48,6 @@ cubic_spline <- function(x, y, degree, df)
     library(splines2)
 
     knots <- summary(x)[c(2, 3, 5)]
-    newx <- c(0, 0.27, 3)  # TODO: shoud the user have a chance to change this?
     sorted.x = sort(x)
 
     bsMat <- bSpline(
@@ -69,7 +68,6 @@ cubic_spline <- function(x, y, degree, df)
         cubic_spline_preds$fit + 2 * cubic_spline_preds$se.fit,
         cubic_spline_preds$fit - 2 * cubic_spline_preds$se.fit
     )
-    # cubic_spline_residuals <- y - cubic_spline_preds$fit
 
     return(cubic_spline_preds$fit)
 }
