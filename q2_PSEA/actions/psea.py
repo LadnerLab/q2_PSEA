@@ -85,8 +85,12 @@ def make_psea_table(
 
             maxZ = np.apply_over_axes(
                 np.max,
-                processed_scores.loc[:, [pair[0], pair[1]]],
+                processed_scores.loc[:, pair],
                 1
+            )
+            maxZ = pd.Series(
+                data=[num for elem in maxZ for num in elem],
+                index=processed_scores.index
             )
             deltaZ = pd.Series(
                 data=y - yfit, index=data_sorted.index
