@@ -54,7 +54,7 @@ def make_psea_table(
     processed_scores = process_scores(scores, pairs)
 
     with tempfile.TemporaryDirectory() as tempdir:
-        processed_scores.to_csv(f"{tempdir}/proc_scores.tsv", sep="\t")
+        processed_scores.to_csv("proc_scores.tsv", sep="\t")
         processed_scores, peptide_sets = utils.remove_peptides(
             processed_scores, peptide_sets_file
         )
@@ -131,7 +131,7 @@ def make_psea_table(
 
         processed_scores_art = ctx.make_artifact(
             type="FeatureTable[Zscore]",
-            view=f"{tempdir}/proc_scores.tsv",
+            view="proc_scores.tsv",
             view_type=PepsirfContingencyTSVFormat
         )
     
