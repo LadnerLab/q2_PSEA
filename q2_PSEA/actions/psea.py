@@ -1,4 +1,3 @@
-# import gseapy as gp
 import numpy as np
 import os
 import pandas as pd
@@ -19,7 +18,11 @@ cluster_profiler = importr("clusterProfiler")
 pandas2ri.activate()
 
 
-def generate_vis(
+
+SPLINE_TYPES = ["r", "py"]
+
+
+def make_psea_table(
         ctx,
         scores_file,
         pairs_file,
@@ -31,17 +34,15 @@ def generate_vis(
         min_size=15,
         max_size=2000,
         permutation_num=10000,  # as per original PSEA code
-        table_dir="./table_dir",
-        # True by default since Python implementation is still being developed
-        r_ctrl=True,
+        spline_type="r",
+        table_dir="./psea_table_outdir",
         threads=4,
         pepsirf_binary="pepsirf"
 ):    
     volcano = ctx.get_action("ps-plot", "volcano")
     zscatter = ctx.get_action("ps-plot", "zscatter")
 
-    if isnan(p_val_thresh):
-        p_val_thresh = 0.05
+    assert spline_type in SPLINE_TYPES, f"'{spline_type}' is not a valid spline method!"
 
     if not os.path.exists(table_dir):
         os.mkdir(table_dir)
@@ -59,125 +60,90 @@ def generate_vis(
     scores = pd.read_csv(scores_file, sep="\t", index_col=0)
     processed_scores = process_scores(scores, pairs)
 
+
+    # get peptide_sets_files after running iterative peptide analysis
+    peptide_sets_file = run_iterative_peptide_analysis(
+        pairs=pairs,
+        processed_scores=processed_scores,
+        og_peptide_sets_file=peptide_sets_file,
+        species_taxa_file=species_taxa_file,
+        threshold=threshold,
+        permutation_num=permutation_num,
+        min_size=min_size,
+        max_size=max_size,
+        spline_type=spline_type,
+        p_val_thresh=p_val_thresh,
+        es_thresh=es_thresh
+        )
+
+
     with tempfile.TemporaryDirectory() as tempdir:
         processed_scores.to_csv(f"{tempdir}/proc_scores.tsv", sep="\t")
+        processed_scores, peptide_sets = utils.remove_peptides(
+            processed_scores, peptide_sets_file
+        )
 
-        final_table_dict = {
-            "ID": list(),
-            "enrichmentScore": list(),
-            "NES": list(),
-            "p.adjust": list(),
-            "core_enrichment": list(),
-            "pvalue": list(),
-            "qvalue": list(),
-            "all_tested_peptides": list(),
-            "species_name": list()
-        }
-        if r_ctrl:
-            rread_gmt = ro.r["read.gmt"]
-            processed_scores = utils.remove_peptides_in_gmt_format(
-                processed_scores, peptide_sets_file
-            )
-            peptide_sets = rread_gmt(peptide_sets_file)
+        titles = []
+        taxa_access = "species_name"
+        used_pairs = []
+        pair_spline_dict = {}
 
-            print(f"Peptide sets (type={type(peptide_sets)}) =\n{peptide_sets}")
+        if not species_taxa_file:
+            taxa_access = "ID"
 
-            titles = []
-            p_val_thresholds = []
-            used_pairs = []
-            pair_spline_dict = {}
-            if species_taxa_file:
-                taxa_access = "species_name"
-            else:
-                taxa_access = "ID"
-
-            for pair in pairs:
-                print(f"Working on pair ({pair[0]}, {pair[1]})...")
-                used_pairs.append(pair)
-                prefix = f"{pair[0]}~{pair[1]}"
-
-                filter_peptides = True
-                while filter_peptides:
-                    spline_tup = r_max_delta_by_spline(
-                        processed_scores,
-                        pair
-                    )
-                    maxZ = spline_tup[0]
-                    deltaZ = spline_tup[1]
-                    spline_x = np.array(spline_tup[2]["x"])
-                    spline_y = np.array(spline_tup[2]["y"])
-                    pair_spline_dict[pair[0]] = pd.Series(spline_x)
-                    pair_spline_dict[pair[1]] = pd.Series(spline_y)
-
-                    table = INTERNAL.psea(
-                        maxZ,
-                        deltaZ,
-                        peptide_sets,
-                        species_taxa_file,
-                        threshold,
-                        permutation_num,
-                        min_size,
-                        max_size
-                    )
-                    with (ro.default_converter
-                            + pandas2ri.converter).context():
-                        table = ro.conversion.get_conversion().rpy2py(table)
-
-                    # TODO: watch 070236
-                    # TODO: sort table to get the "top scoring" (lowest p-val,
-                    # then default to ES) virus
-                    table.sort_values(
-                        by=["pvalue", "enrichmentScore"],  # DOES NOT PUT THE BIGGEST ES AT THE TOP OF THE TABLE
-                        ascending=False,
-                        inplace=True
-                    )
-                    # TODO: probably wrap in function
-                    # 1) sort by p-value -> new table
-                    # 2) sort by ES -> new table
-                    # 3) compare top species for both tables
-                    #     a1) if species is different
-                    #         b1) grab species from ES table
-                    #     a2) otherwise, species is the same
-                    #         c1) grab species from p-value table
-                    # TODO: find out how to make pandas do this
-                    table.to_csv(f"sorted_tables/{prefix}.tsv", sep="\t")
-
-                    p_val = table.iloc[0, 5]
-                    es = table.iloc[0, 1]
-                    if p_val_thresh < p_val and es_thresh < es:
-                        tested_peptides = table.iloc[0, 7].split("/")
-                        # TODO: maybe I can have a global converter instead
-                        with (ro.default_converter
-                                + pandas2ri.converter).context():
-                            peptide_sets = utils.remove_peptides_from_set(peptide_sets, tested_peptides, table.index[0])
-                            peptide_sets = ro.conversion.get_conversion().py2rpy(peptide_sets)
-                            # TODO: make sure peptide_sets is the same type to pass to R
-
-                        final_table_dict["ID"].append(table.iloc[0, 0])
-                        final_table_dict["enrichmentScore"].append(table.iloc[0, 1])
-                        final_table_dict["NES"].append(table.iloc[0, 2])
-                        final_table_dict["p.adjust"].append(table.iloc[0, 3])
-                        final_table_dict["core_enrichment"].append(table.iloc[0, 4])
-                        final_table_dict["pvalue"].append(table.iloc[0, 5])
-                        final_table_dict["qvalue"].append(table.iloc[0, 6])
-                        final_table_dict["all_tested_peptides"].append(table.iloc[0, 7])
-                        final_table_dict["species_name"].append(table.iloc[0, 8])
-                        fnal
-                    else:
-                        # TODO: maybe a loop needs to check there are no more sig taxa
-                        filter_peptides = False
-                    # TODO: write remaining species to final table
-
-                # table = pd.DataFrame(final_table_dict)
-                pd.DataFrame(final_table_dict).to_csv(  # TODO: could all this go in a temp dir?
-                    f"{table_dir}/{prefix}_psea_table.tsv",
-                    sep="\t", index=False
+        for pair in pairs:
+            print(f"Working on pair ({pair[0]}, {pair[1]})...")
+        
+            # TODO: figure out how to make this faster as the number of
+            # possibilities expand (i.e. switch)
+            if spline_type == "py":
+                spline_tup = py_delta_by_spline(
+                    processed_scores,
+                    pair
                 )
-                taxa = table.loc[:, taxa_access].to_list()
+            else:
+                spline_tup = r_delta_by_spline(
+                    processed_scores,
+                    pair
+                )
+            maxZ = np.apply_over_axes(
+                np.max,
+                processed_scores.loc[:, pair],
+                1
+            )
+            maxZ = pd.Series(
+                data=[num for elem in maxZ for num in elem],
+                index=processed_scores.index
+            )
+            deltaZ = spline_tup[0]
+            spline_x = np.array(spline_tup[1]["x"])
+            spline_y = np.array(spline_tup[1]["y"])
+            pair_spline_dict[pair[0]] = pd.Series(spline_x)
+            pair_spline_dict[pair[1]] = pd.Series(spline_y)
+            used_pairs.append(pair)
 
-                p_val_thresholds.append(p_val_thresh / len(taxa))
+            table = INTERNAL.psea(
+                maxZ,
+                deltaZ,
+                peptide_sets,
+                species_taxa_file,
+                threshold,
+                permutation_num,
+                min_size,
+                max_size
+            )
+            with (ro.default_converter + pandas2ri.converter).context():
+                table = ro.conversion.get_conversion().rpy2py(table)
 
-                titles.append(prefix)
+            prefix = f"{pair[0]}~{pair[1]}"
+            table.to_csv(
+                f"{table_dir}/{prefix}_psea_table.tsv",
+                sep="\t", index=False
+            )
+
+            taxa = table.loc[:, taxa_access].to_list()
+
+            titles.append(prefix)
 
             pd.DataFrame(used_pairs).to_csv(
                 f"{tempdir}/used_pairs.tsv", sep="\t",
@@ -186,41 +152,6 @@ def generate_vis(
             pd.DataFrame(pair_spline_dict).to_csv(
                 f"{tempdir}/timepoint_spline_values.tsv", sep="\t", index=False
             )
-        else:
-            print(
-                "The '--p-r-ctrl' parameter has been unset, please set the"
-                " parameter to 'True' as PSEA using Python is still being"
-                " worked on."
-            )
-            # if out_table_name == "":
-            #     out_table_name = "py_table.tsv"
-
-            # processed_scores = remove_peptides_in_gmt_format(
-            #     processed_scores, peptide_sets_file
-            # )
-
-            # # TODO: reimplement loop to cover all defined pairs
-            # # run PSEA operation for current pair
-            # spline_tup = py_max_delta_by_spline(
-            #     processed_scores,
-            #     ["070060_D360.Pro_PV2T", "070060_D540.Pro_PV2T"]
-            # )
-            # maxZ = spline_tup[0]
-            # deltaZ = spline_tup[1]
-
-            # table = psea(
-            #     maxZ=maxZ,
-            #     deltaZ=deltaZ,
-            #     peptide_sets_file=peptide_sets_file,
-            #     species_taxa_file=species_taxa_file,
-            #     threshold=threshold,
-            #     min_size=min_size,
-            #     max_size=max_size,
-            #     permutation_num=permutation_num,
-            #     threads=threads,
-            #     outdir="table_outdir"
-            # )
-            # table.to_csv(out_table_name, sep="\t", index=False)
 
         processed_scores_art = ctx.make_artifact(
             type="FeatureTable[Zscore]",
@@ -233,7 +164,7 @@ def generate_vis(
             pairs_file=f"{tempdir}/used_pairs.tsv",
             spline_file=f"{tempdir}/timepoint_spline_values.tsv",
             highlight_data=table_dir,
-            highlight_thresholds=p_val_thresholds,
+            highlight_thresholds=[p_val_thresh],
             species_taxa_file=species_taxa_file
         )
 
@@ -242,7 +173,7 @@ def generate_vis(
             xy_access=["NES", "p.adjust"],
             taxa_access=taxa_access,
             x_threshold=es_thresh,
-            y_thresholds=p_val_thresholds,
+            y_thresholds=[p_val_thresh],
             xy_labels=["Enrichment score", "Adjusted p-values"],
             titles=titles
         )
@@ -250,7 +181,12 @@ def generate_vis(
     return scatter_plot, volcano_plot
 
 
-def py_max_delta_by_spline(data, timepoints) -> tuple:
+def py_delta_by_spline(
+    data,
+    timepoints,
+    knots=5,
+    s=None
+) -> tuple:
     """Finds the maximum value between two samples, and calculates the
     difference in Z score for each peptide
 
@@ -259,7 +195,7 @@ def py_max_delta_by_spline(data, timepoints) -> tuple:
     data : pd.DataFrame
         Matrix of Z scores for sequence
 
-    pair : Tuple
+    timepoints : tuple
         Tuple pair of samples for which to run max spline
 
     Returns
@@ -268,23 +204,19 @@ def py_max_delta_by_spline(data, timepoints) -> tuple:
         Contains maximum Z score, the difference (delta) in actual from
         predicted Z scores, the spline values for x and y
     """
-    maxZ = np.apply_over_axes(np.max, data.loc[:, timepoints], 1)
+    data_sorted = data.sort_values(by=timepoints[0])
 
-    y = data.loc[:, timepoints[0]].to_numpy()
-    x = data.loc[:, timepoints[1]].to_numpy()
-    # tentative magic number 5 knots came from tutorial linked above
-    smooth_spline = spline(5, y)
-    deltaZ = y - smooth_spline(x)
+    x = data_sorted.loc[:, timepoints[0]].to_numpy()
+    y = data_sorted.loc[:, timepoints[1]].to_numpy()
+    yfit = spline(x, y, knots, s)
+    deltaZ = y - yfit
+    spline_dict = { "x": x, "y": yfit }
 
-    maxZ = pd.Series(
-        data=[num for elem in maxZ for num in elem],
-        index=data.index
-    )
-    deltaZ = pd.Series(data=deltaZ, index=data.index)
-    return (maxZ, deltaZ)
+    deltaZ = pd.Series(data=deltaZ, index=data_sorted.index).sort_index()
+    return (deltaZ, spline_dict)
 
 
-def r_max_delta_by_spline(data, timepoints) -> tuple:
+def r_delta_by_spline(data, timepoints) -> tuple:
     """Uses R functions to find the maximum Z score between two points in time,
     and to calculate spline for time points and the delta
 
@@ -306,7 +238,6 @@ def r_max_delta_by_spline(data, timepoints) -> tuple:
     rsmooth_spline = ro.r["smooth.spline"]
 
     with (ro.default_converter + pandas2ri.converter).context():
-        maxZ = rapply(data.loc[:, timepoints], 1, "max")
         # TODO: `spline` object ends up coming back as an OrdDict; when passed
         # to another function, an error is thrown explaining that py2rpy is not
         # defined for rpy2.rlike.containers.OrdDict; this must be revisted to
@@ -319,10 +250,8 @@ def r_max_delta_by_spline(data, timepoints) -> tuple:
             data.loc[:, timepoints[0]], data.loc[:, timepoints[1]]
         )
 
-    maxZ = pd.Series(data=maxZ, index=data.index.to_list())
     deltaZ = pd.Series(data=deltaZ, index=data.index.to_list())
-
-    return (maxZ, deltaZ, spline)
+    return (deltaZ, spline)
 
 
 def psea(
@@ -466,23 +395,179 @@ def process_scores(scores, pairs) -> pd.DataFrame:
     )
 
 
-def spline(knots, y):
-    """Creates spline object from which a prediction can be made based on given
-    y-values
-
+def spline(x, y, knots=3, s=0.788458):
+    """Returns predicted values of `y` based on the given `x` values
+    
     Parameters
     ----------
-    y : float array
+    x : list(float)
+
+    y : list(float)
+
+    knots : int
+
+    s : float
 
     Returns
     -------
-    BSpline
-        Spline object from which predictions can be made given a set of
-        x-values
+    list(float)
+        Predicted y value for every given x value
     """
-    x = range(0, len(y))
     x_new = np.linspace(0, 1, knots+2)[1:-1]
     q_knots = np.quantile(x, x_new)
-    # smoothing condition `s` from smooth.spline() in original R code
-    t, c, k = interpolate.splrep(x, y, t=q_knots, s=0.788458)
-    return interpolate.BSpline(t, c, k)
+    t, c, k = interpolate.splrep(x, y, t=q_knots, s=s)
+    return interpolate.BSpline(t, c, k)(x)
+    
+
+def run_iterative_peptide_analysis(
+    pairs,
+    processed_scores,
+    og_peptide_sets_file,
+    species_taxa_file,
+    threshold,
+    permutation_num,
+    min_size,
+    max_size,
+    spline_type,
+    p_val_thresh,
+    es_thresh
+    ):
+    
+    print("\nIterative Peptide Analysis")
+    print("==========================")
+
+    sig_spec_found = True
+    iteration_num = 1
+    final_gmt_name = "final.gmt"
+
+    # keep a dict for each pair and it's tested species
+    tested_species_dict = dict.fromkeys(pairs, set())
+    
+    # initialize gmt dict
+    gmt_dict = dict()
+    with open(og_peptide_sets_file, "r") as file:
+        lines = file.readlines()
+        for line in lines:
+            line = line.strip().split("\t")
+            # species : set of peptides
+            gmt_dict[ line[0] ] = set( line[2:] )
+
+    # open temp dir to store each iteration's gmt file
+    with tempfile.TemporaryDirectory() as tempdir_gmt:
+
+        # loop until no other significant peptides were found
+        while sig_spec_found:
+
+            print("\nIteration:", iteration_num)
+
+            sig_spec_found = False
+
+            # create gmt file for this iteration (filtered gmt set from prev iteration)
+            iter_peptide_sets_file = f"{tempdir_gmt}/temp_gmt_{iteration_num}.gmt"
+
+            with open( iter_peptide_sets_file, "w" ) as gmt_file:
+                for species in gmt_dict.keys():
+                    gmt_file.write(f"{species}\t\t")
+
+                    for peptide in gmt_dict[ species ]:
+                        gmt_file.write(f"{peptide}\t")
+
+                    gmt_file.write("\n")
+
+            with tempfile.TemporaryDirectory() as tempdir_scores:
+                processed_scores.to_csv(f"{tempdir_scores}/proc_scores.tsv", sep="\t")
+                processed_scores, peptide_sets = utils.remove_peptides(
+                    processed_scores, iter_peptide_sets_file
+                )
+
+                titles = []
+                taxa_access = "species_name"
+                used_pairs = []
+                pair_spline_dict = {}
+
+                if not species_taxa_file:
+                    taxa_access = "ID"
+
+                for pair in pairs:
+                    print(f"Working on pair ({pair[0]}, {pair[1]})...")
+                
+                    # TODO: figure out how to make this faster as the number of
+                    # possibilities expand (i.e. switch)
+                    if spline_type == "py":
+                        spline_tup = py_delta_by_spline(
+                            processed_scores,
+                            pair
+                        )
+                    else:
+                        spline_tup = r_delta_by_spline(
+                            processed_scores,
+                            pair
+                        )
+                    maxZ = np.apply_over_axes(
+                        np.max,
+                        processed_scores.loc[:, pair],
+                        1
+                    )
+                    maxZ = pd.Series(
+                        data=[num for elem in maxZ for num in elem],
+                        index=processed_scores.index
+                    )
+                    deltaZ = spline_tup[0]
+                    spline_x = np.array(spline_tup[1]["x"])
+                    spline_y = np.array(spline_tup[1]["y"])
+                    pair_spline_dict[pair[0]] = pd.Series(spline_x)
+                    pair_spline_dict[pair[1]] = pd.Series(spline_y)
+                    used_pairs.append(pair)
+
+                    table = INTERNAL.psea(
+                        maxZ,
+                        deltaZ,
+                        peptide_sets,
+                        species_taxa_file,
+                        threshold,
+                        permutation_num,
+                        min_size,
+                        max_size
+                    )
+                    with (ro.default_converter + pandas2ri.converter).context():
+                        table = ro.conversion.get_conversion().rpy2py(table)
+
+                    # sort the table by ascending p-value (lowest on top)
+                    table.sort_values(by=["pvalue"], ascending=True)
+
+                    # iterate through each row
+                    for index, row in table.iterrows():
+
+                        # test for significant species that has not already been used for this pair
+                        if row["pvalue"] < p_val_thresh and row["enrichmentScore"] > es_thresh and row["ID"] not in tested_species_dict[pair]:
+
+                            print(f"Found {row['ID']} in {pair}")
+                            sig_spec_found = True
+                            tested_species_dict[pair].add(row["ID"])
+
+                            # take out all tested peptides from peptide set in gmt for that species
+                            all_tested_peps = set(row["all_tested_peptides"].split("/"))
+                            gmt_dict[row["ID"]] = gmt_dict[row["ID"]] - all_tested_peps
+
+                            # only get top significant species
+                            break
+
+                iteration_num += 1
+
+    # save final filtered gmt file outside of temp dir
+    with open( final_gmt_name, "w" ) as gmt_file:
+        for species in gmt_dict.keys():
+            gmt_file.write(f"{species}\t\t")
+
+            for peptide in gmt_dict[ species ]:
+                gmt_file.write(f"{peptide}\t")
+
+            gmt_file.write("\n")
+
+    print("==========================\n")
+
+    # return filtered gmt file name
+    return final_gmt_name
+
+
+
