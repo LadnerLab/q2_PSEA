@@ -59,7 +59,7 @@ def make_psea_table(
     scores = pd.read_csv(scores_file, sep="\t", index_col=0)
     processed_scores = process_scores(scores, pairs)
 
-
+    
     # get peptide_sets_files after running iterative peptide analysis
     peptide_sets_file = run_iterative_peptide_analysis(
         pairs=pairs,
@@ -417,36 +417,6 @@ def spline(x, y, knots=3, s=0.788458):
     t, c, k = interpolate.splrep(x, y, t=q_knots, s=s)
     return interpolate.BSpline(t, c, k)(x)
 
-def dont_use_this_peptide_iterative_analysis( df, p_val_thresh, es_thresh) -> pd.DataFrame:
-    species_dict = dict()
-    values_dict = dict()
-
-    # create dictionary with species ID as key and set of all tested peptides as value
-    # create another dictionary with same key and pval, and es as value
-    for index, row in df.iterrows():
-        species_dict[row["ID"]] = set(row["all_tested_peptides"].split("/"))
-        values_dict[row["ID"]] = ( row["pvalue"], row["enrichmentScore"] )
-
-    
-    for ID in species_dict.keys():
-        # test if petides are significant for that species
-        if values_dict[ID][0] < p_val_thresh and values_dict[ID][1] > es_thresh:
-            # remove significant peptides from species set
-            for other_ID in species_dict.keys():
-                if other_ID != ID:
-                    species_dict[other_ID] = species_dict[other_ID] - species_dict[ID]
-
-
-    
-    # TODO: turn "all_tested_peptides" value into "significant peptides", then make chart with new df
-    sig_species_table = pd.DataFrame([(k,"/".join(v)) for k,v in species_dict.items()], columns=[ "ID", "all_tested_peptides" ] )
-
-    sig_species_table = sig_species_table.set_index("ID")
-
-    df["all_tested_peptides"] = sig_species_table["all_tested_peptides"]
-
-    return df
-
 
 def run_iterative_peptide_analysis(
     pairs,
@@ -462,7 +432,7 @@ def run_iterative_peptide_analysis(
     es_thresh
     ):
     
-    print("Iterative Peptide Analysis")
+    print("\nIterative Peptide Analysis")
     print("==========================")
 
     sig_spec_found = True
@@ -494,14 +464,7 @@ def run_iterative_peptide_analysis(
             # create gmt file for this iteration (filtered gmt set from prev iteration)
             iter_peptide_sets_file = f"{tempdir_gmt}/temp_gmt_{iteration_num}.gmt"
 
-            with open( iter_peptide_sets_file, "w" ) as gmt_file:
-                for species in gmt_dict.keys():
-                    gmt_file.write(f"{species}\t\t")
-
-                    for peptide in gmt_dict[ species ]:
-                        gmt_file.write(f"{peptide}\t")
-
-                    gmt_file.write("\n")
+            write_gmt_from_dict(iter_peptide_sets_file, gmt_dict)
 
             with tempfile.TemporaryDirectory() as tempdir_scores:
                 processed_scores.to_csv(f"{tempdir_scores}/proc_scores.tsv", sep="\t")
@@ -519,7 +482,9 @@ def run_iterative_peptide_analysis(
 
                 for pair in pairs:
                     print(f"Working on pair ({pair[0]}, {pair[1]})...")
-                
+                    
+                    # TODO: try to make this a function to avoid reduncancy (same code in make_psea_table)
+
                     # TODO: figure out how to make this faster as the number of
                     # possibilities expand (i.e. switch)
                     if spline_type == "py":
@@ -568,15 +533,18 @@ def run_iterative_peptide_analysis(
                     for index, row in table.iterrows():
 
                         # test for significant species that has not already been used for this pair
-                        if row["pvalue"] < p_val_thresh and row["enrichmentScore"] > es_thresh and row["ID"] not in tested_species_dict[pair]:
+                        if row["pvalue"] < p_val_thresh and row["enrichmentScore"] > es_thresh \
+                                                    and row["ID"] not in tested_species_dict[pair]:
 
                             print(f"Found {row['ID']} in {pair}")
                             sig_spec_found = True
                             tested_species_dict[pair].add(row["ID"])
 
-                            # take out all tested peptides from peptide set in gmt for that species
+                            # take out all tested peptides from peptide set in gmt for all other species in the gmt
                             all_tested_peps = set(row["all_tested_peptides"].split("/"))
-                            gmt_dict[row["ID"]] = gmt_dict[row["ID"]] - all_tested_peps
+                            for gmt_species in gmt_dict.keys():
+                                if gmt_species != row['ID']:
+                                    gmt_dict[ gmt_species ]= gmt_dict[ gmt_species ] - all_tested_peps
 
                             # only get top significant species
                             break
@@ -584,14 +552,7 @@ def run_iterative_peptide_analysis(
                 iteration_num += 1
 
     # save final filtered gmt file outside of temp dir
-    with open( final_gmt_name, "w" ) as gmt_file:
-        for species in gmt_dict.keys():
-            gmt_file.write(f"{species}\t\t")
-
-            for peptide in gmt_dict[ species ]:
-                gmt_file.write(f"{peptide}\t")
-
-            gmt_file.write("\n")
+    write_gmt_from_dict(final_gmt_name, gmt_dict)
 
     print("==========================\n")
 
@@ -599,4 +560,12 @@ def run_iterative_peptide_analysis(
     return final_gmt_name
 
 
+def write_gmt_from_dict(outfile_name, gmt_dict)->None:
+    with open( outfile_name, "w" ) as gmt_file:
+        for species in gmt_dict.keys():
+            gmt_file.write(f"{species}\t\t")
 
+            for peptide in gmt_dict[ species ]:
+                gmt_file.write(f"{peptide}\t")
+
+            gmt_file.write("\n")
