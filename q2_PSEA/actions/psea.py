@@ -29,7 +29,7 @@ def make_psea_table(
         min_size=15,
         max_size=2000,
         permutation_num=10000,  # as per original PSEA code
-        spline_type="r",
+        spline_type="r-smooth",
         degree=3,
         df=None,
         table_dir="./psea_table_outdir",
@@ -52,9 +52,10 @@ def make_psea_table(
         ]
     scores = pd.read_csv(scores_file, sep="\t", index_col=0)
     processed_scores = process_scores(scores, pairs)
+    processed_scores_file = f"transformed_{scores_file.split('/')[1]}"
 
     with tempfile.TemporaryDirectory() as tempdir:
-        processed_scores.to_csv("proc_scores.tsv", sep="\t")
+        processed_scores.to_csv(processed_scores_file, sep="\t")
         processed_scores, peptide_sets = utils.remove_peptides(
             processed_scores, peptide_sets_file
         )
@@ -131,7 +132,7 @@ def make_psea_table(
 
         processed_scores_art = ctx.make_artifact(
             type="FeatureTable[Zscore]",
-            view="proc_scores.tsv",
+            view=processed_scores_file,
             view_type=PepsirfContingencyTSVFormat
         )
     
