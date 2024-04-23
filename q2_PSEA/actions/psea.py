@@ -142,7 +142,7 @@ def make_psea_table(
             pairs_file=f"{tempdir}/used_pairs.tsv",
             spline_file=f"{tempdir}/spline_data.tsv",
             highlight_data=table_dir,
-            highlight_thresholds=[p_val_thresh],
+            highlight_threshold=p_val_thresh,
             species_taxa_file=species_taxa_file
         )
 
@@ -151,7 +151,7 @@ def make_psea_table(
             xy_access=["NES", "p.adjust"],
             taxa_access=taxa_access,
             x_threshold=es_thresh,
-            y_thresholds=[p_val_thresh],
+            y_threshold=p_val_thresh,
             xy_labels=["Enrichment score", "Adjusted p-values"],
             titles=titles
         )
