@@ -49,7 +49,7 @@ def make_psea_table(
     else:
         print(
             f"Warning: the directory '{table_dir}' already exists; files may"
-            "be overwritten!"
+            " be overwritten!"
         )
 
     with open(pairs_file, "r") as fh:
