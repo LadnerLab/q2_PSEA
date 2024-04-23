@@ -49,7 +49,7 @@ def make_psea_table(
     else:
         print(
             f"Warning: the directory '{table_dir}' already exists; files may"
-            " be overwritten!"
+            "be overwritten!"
         )
 
     with open(pairs_file, "r") as fh:
@@ -533,7 +533,7 @@ def run_iterative_peptide_analysis(
                     for index, row in table.iterrows():
 
                         # test for significant species that has not already been used for this pair
-                        if row["pvalue"] < p_val_thresh and row["enrichmentScore"] > es_thresh \
+                        if row["pvalue"] < p_val_thresh and np.absolute(row["enrichmentScore"]) > es_thresh \
                                                     and row["ID"] not in tested_species_dict[pair]:
 
                             print(f"Found {row['ID']} in {pair}")
