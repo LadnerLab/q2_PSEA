@@ -36,7 +36,9 @@ plugin.pipelines.register_function(
         "spline_type": Str,
         "table_dir": Str,
         "threads": Int,
-        "pepsirf_binary": Str
+        "pepsirf_binary": Str,
+        "iter_tables_dir": Str,
+        "get_iter_tables": Bool
     },
     parameter_descriptions={
         "scores_file": "Name of Z score matrix file.",
@@ -62,7 +64,9 @@ plugin.pipelines.register_function(
         "spline_type": "Specifies which spline operation to use.",
         "table_dir": "Directory where resulting PSEA tables will be stored.",
         "threads": "Number of threads with which to run ssGSEA operation.",
-        "pepsirf_binary": "Path to pepsirf binary."
+        "pepsirf_binary": "Path to pepsirf binary.",
+        "iter_tables_dir": "Directory name to output iteration tables to.",
+        "get_iter_tables": "Boolean value, whether or not iteration tables should be outputted."
     },
     outputs=[("scatter_plot", Visualization), ("volcano_plot", Visualization)],
     output_descriptions={

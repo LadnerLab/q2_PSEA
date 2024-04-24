@@ -37,7 +37,9 @@ def make_psea_table(
         spline_type="r",
         table_dir="./psea_table_outdir",
         threads=4,
-        pepsirf_binary="pepsirf"
+        pepsirf_binary="pepsirf",
+        iter_tables_dir="./psea_iter_tables_outdir",
+        get_iter_tables=False
 ):    
     volcano = ctx.get_action("ps-plot", "volcano")
     zscatter = ctx.get_action("ps-plot", "zscatter")
@@ -61,6 +63,15 @@ def make_psea_table(
     processed_scores = process_scores(scores, pairs)
 
     with tempfile.TemporaryDirectory() as temp_peptide_sets_dir:
+        if get_iter_tables:
+            if not os.path.exists(iter_tables_dir):
+                os.mkdir(iter_tables_dir)
+            else:
+                print(
+                    f"Warning: the directory '{iter_tables_dir}' already exists; files may"
+                    " be overwritten!"
+                )
+
         # run iterative peptide analysis, writes to temp_peptide_sets_dir files
         run_iterative_peptide_analysis(
             pairs=pairs,
@@ -74,7 +85,9 @@ def make_psea_table(
             spline_type=spline_type,
             p_val_thresh=p_val_thresh,
             es_thresh=es_thresh,
-            peptide_sets_out_dir = temp_peptide_sets_dir
+            peptide_sets_out_dir = temp_peptide_sets_dir,
+            iter_tables_dir=iter_tables_dir,
+            get_iter_tables=get_iter_tables
             )
 
 
@@ -433,7 +446,9 @@ def run_iterative_peptide_analysis(
     spline_type,
     p_val_thresh,
     es_thresh,
-    peptide_sets_out_dir
+    peptide_sets_out_dir,
+    iter_tables_dir,
+    get_iter_tables
     ) -> None:
 
     iteration_num = 1
@@ -512,7 +527,12 @@ def run_iterative_peptide_analysis(
                 with (ro.default_converter + pandas2ri.converter).context():
                     table = ro.conversion.get_conversion().rpy2py(table)
 
-                table.to_csv(f"iter-tables/{pair}-{iteration_num}.tsv", sep="\t")
+                if get_iter_tables:
+                    if not os.path.exists(f"{iter_tables_dir}/Iteration-{iteration_num}"):
+                        os.mkdir(f"{iter_tables_dir}/Iteration-{iteration_num}")
+                        
+                    table.to_csv(f"{iter_tables_dir}/Iteration-{iteration_num}/{pair}.tsv", sep="\t")
+
 
                 # sort the table by ascending p-value (lowest on top)
                 table.sort_values(by=["pvalue"], ascending=True)
