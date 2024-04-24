@@ -60,123 +60,125 @@ def make_psea_table(
     scores = pd.read_csv(scores_file, sep="\t", index_col=0)
     processed_scores = process_scores(scores, pairs)
 
-    
-    # get peptide_sets_files after running iterative peptide analysis
-    peptide_sets_file = run_iterative_peptide_analysis(
-        pairs=pairs,
-        processed_scores=processed_scores,
-        og_peptide_sets_file=peptide_sets_file,
-        species_taxa_file=species_taxa_file,
-        threshold=threshold,
-        permutation_num=permutation_num,
-        min_size=min_size,
-        max_size=max_size,
-        spline_type=spline_type,
-        p_val_thresh=p_val_thresh,
-        es_thresh=es_thresh
-        )
+    with tempfile.TemporaryDirectory() as temp_peptide_sets_dir:
+        # run iterative peptide analysis, writes to temp_peptide_sets_dir files
+        run_iterative_peptide_analysis(
+            pairs=pairs,
+            processed_scores=processed_scores,
+            og_peptide_sets_file=peptide_sets_file,
+            species_taxa_file=species_taxa_file,
+            threshold=threshold,
+            permutation_num=permutation_num,
+            min_size=min_size,
+            max_size=max_size,
+            spline_type=spline_type,
+            p_val_thresh=p_val_thresh,
+            es_thresh=es_thresh,
+            peptide_sets_out_dir = temp_peptide_sets_dir
+            )
 
 
-    with tempfile.TemporaryDirectory() as tempdir:
-        processed_scores.to_csv(f"{tempdir}/proc_scores.tsv", sep="\t")
-        processed_scores, peptide_sets = utils.remove_peptides(
-            processed_scores, peptide_sets_file
-        )
+        with tempfile.TemporaryDirectory() as tempdir:
+            processed_scores.to_csv(f"{tempdir}/proc_scores.tsv", sep="\t")
 
-        titles = []
-        taxa_access = "species_name"
-        used_pairs = []
-        pair_spline_dict = {}
+            titles = []
+            taxa_access = "species_name"
+            used_pairs = []
+            pair_spline_dict = {}
 
-        if not species_taxa_file:
-            taxa_access = "ID"
+            if not species_taxa_file:
+                taxa_access = "ID"
 
-        for pair in pairs:
-            print(f"Working on pair ({pair[0]}, {pair[1]})...")
+            for pair in pairs:
+                print(f"Working on pair ({pair[0]}, {pair[1]})...")
+
+                processed_scores, peptide_sets = utils.remove_peptides(
+                    processed_scores, f"{temp_peptide_sets_dir}/{pair[0]}_{pair[1]}".replace(".","-") + ".gmt"
+                )
+            
+                # TODO: figure out how to make this faster as the number of
+                # possibilities expand (i.e. switch)
+                if spline_type == "py":
+                    spline_tup = py_delta_by_spline(
+                        processed_scores,
+                        pair
+                    )
+                else:
+                    spline_tup = r_delta_by_spline(
+                        processed_scores,
+                        pair
+                    )
+                maxZ = np.apply_over_axes(
+                    np.max,
+                    processed_scores.loc[:, pair],
+                    1
+                )
+                maxZ = pd.Series(
+                    data=[num for elem in maxZ for num in elem],
+                    index=processed_scores.index
+                )
+                deltaZ = spline_tup[0]
+                spline_x = np.array(spline_tup[1]["x"])
+                spline_y = np.array(spline_tup[1]["y"])
+                pair_spline_dict[pair[0]] = pd.Series(spline_x)
+                pair_spline_dict[pair[1]] = pd.Series(spline_y)
+                used_pairs.append(pair)
+
+                table = INTERNAL.psea(
+                    maxZ,
+                    deltaZ,
+                    peptide_sets,
+                    species_taxa_file,
+                    threshold,
+                    permutation_num,
+                    min_size,
+                    max_size
+                )
+                with (ro.default_converter + pandas2ri.converter).context():
+                    table = ro.conversion.get_conversion().rpy2py(table)
+
+                prefix = f"{pair[0]}~{pair[1]}"
+                table.to_csv(
+                    f"{table_dir}/{prefix}_psea_table.tsv",
+                    sep="\t", index=False
+                )
+
+                taxa = table.loc[:, taxa_access].to_list()
+
+                titles.append(prefix)
+
+                pd.DataFrame(used_pairs).to_csv(
+                    f"{tempdir}/used_pairs.tsv", sep="\t",
+                    header=False, index=False
+                )
+                pd.DataFrame(pair_spline_dict).to_csv(
+                    f"{tempdir}/timepoint_spline_values.tsv", sep="\t", index=False
+                )
+
+            processed_scores_art = ctx.make_artifact(
+                type="FeatureTable[Zscore]",
+                view=f"{tempdir}/proc_scores.tsv",
+                view_type=PepsirfContingencyTSVFormat
+            )
         
-            # TODO: figure out how to make this faster as the number of
-            # possibilities expand (i.e. switch)
-            if spline_type == "py":
-                spline_tup = py_delta_by_spline(
-                    processed_scores,
-                    pair
-                )
-            else:
-                spline_tup = r_delta_by_spline(
-                    processed_scores,
-                    pair
-                )
-            maxZ = np.apply_over_axes(
-                np.max,
-                processed_scores.loc[:, pair],
-                1
-            )
-            maxZ = pd.Series(
-                data=[num for elem in maxZ for num in elem],
-                index=processed_scores.index
-            )
-            deltaZ = spline_tup[0]
-            spline_x = np.array(spline_tup[1]["x"])
-            spline_y = np.array(spline_tup[1]["y"])
-            pair_spline_dict[pair[0]] = pd.Series(spline_x)
-            pair_spline_dict[pair[1]] = pd.Series(spline_y)
-            used_pairs.append(pair)
-
-            table = INTERNAL.psea(
-                maxZ,
-                deltaZ,
-                peptide_sets,
-                species_taxa_file,
-                threshold,
-                permutation_num,
-                min_size,
-                max_size
-            )
-            with (ro.default_converter + pandas2ri.converter).context():
-                table = ro.conversion.get_conversion().rpy2py(table)
-
-            prefix = f"{pair[0]}~{pair[1]}"
-            table.to_csv(
-                f"{table_dir}/{prefix}_psea_table.tsv",
-                sep="\t", index=False
+            scatter_plot, = zscatter(
+                zscores=processed_scores_art,
+                pairs_file=f"{tempdir}/used_pairs.tsv",
+                spline_file=f"{tempdir}/timepoint_spline_values.tsv",
+                highlight_data=table_dir,
+                highlight_thresholds=[p_val_thresh],
+                species_taxa_file=species_taxa_file
             )
 
-            taxa = table.loc[:, taxa_access].to_list()
-
-            titles.append(prefix)
-
-            pd.DataFrame(used_pairs).to_csv(
-                f"{tempdir}/used_pairs.tsv", sep="\t",
-                header=False, index=False
+            volcano_plot, = volcano(
+                xy_dir=table_dir,
+                xy_access=["NES", "p.adjust"],
+                taxa_access=taxa_access,
+                x_threshold=es_thresh,
+                y_thresholds=[p_val_thresh],
+                xy_labels=["Enrichment score", "Adjusted p-values"],
+                titles=titles
             )
-            pd.DataFrame(pair_spline_dict).to_csv(
-                f"{tempdir}/timepoint_spline_values.tsv", sep="\t", index=False
-            )
-
-        processed_scores_art = ctx.make_artifact(
-            type="FeatureTable[Zscore]",
-            view=f"{tempdir}/proc_scores.tsv",
-            view_type=PepsirfContingencyTSVFormat
-        )
-    
-        scatter_plot, = zscatter(
-            zscores=processed_scores_art,
-            pairs_file=f"{tempdir}/used_pairs.tsv",
-            spline_file=f"{tempdir}/timepoint_spline_values.tsv",
-            highlight_data=table_dir,
-            highlight_thresholds=[p_val_thresh],
-            species_taxa_file=species_taxa_file
-        )
-
-        volcano_plot, = volcano(
-            xy_dir=table_dir,
-            xy_access=["NES", "p.adjust"],
-            taxa_access=taxa_access,
-            x_threshold=es_thresh,
-            y_thresholds=[p_val_thresh],
-            xy_labels=["Enrichment score", "Adjusted p-values"],
-            titles=titles
-        )
 
     return scatter_plot, volcano_plot
 
@@ -430,18 +432,11 @@ def run_iterative_peptide_analysis(
     max_size,
     spline_type,
     p_val_thresh,
-    es_thresh
-    ):
-    
-    print("\nIterative Peptide Analysis")
-    print("==========================")
+    es_thresh,
+    peptide_sets_out_dir
+    ) -> None:
 
-    sig_spec_found = True
     iteration_num = 1
-    final_gmt_name = "final.gmt"
-
-    # keep a dict for each pair and it's tested species
-    tested_species_dict = dict.fromkeys(pairs, set())
     
     # initialize gmt dict
     gmt_dict = dict()
@@ -452,112 +447,102 @@ def run_iterative_peptide_analysis(
             # species : set of peptides
             gmt_dict[ line[0] ] = set( line[2:] )
 
-    # open temp dir to store each iteration's gmt file
-    with tempfile.TemporaryDirectory() as tempdir_gmt:
+    # each pair should have its own gmt
+    pair_gmt_dict = dict()
+    # keep track of which pairs are fully processed
+    sig_species_found_dict = dict()
+    # keep a dict for each pair and it's tested species
+    tested_species_dict = dict()
+    for pair in pairs:
+        pair_gmt_dict[ pair ] = gmt_dict.copy()
+        sig_species_found_dict[ pair ] = True
+        tested_species_dict[ pair ] = set()
 
-        # loop until no other significant peptides were found
-        while sig_spec_found:
+    # loop until no other significant peptides were found
+    while any(sig_species_found_dict.values()):
 
-            print("\nIteration:", iteration_num)
+        print("\nIteration:", iteration_num)
 
-            sig_spec_found = False
+        for pair in pairs:
+            if( sig_species_found_dict[ pair ] ):
+                print(f"Working on pair ({pair[0]}, {pair[1]})...")
 
-            # create gmt file for this iteration (filtered gmt set from prev iteration)
-            iter_peptide_sets_file = f"{tempdir_gmt}/temp_gmt_{iteration_num}.gmt"
+                sig_species_found_dict[ pair ] = False
 
-            write_gmt_from_dict(iter_peptide_sets_file, gmt_dict)
+                # create gmt file for this pair (filtered gmt from prev iteration)
+                iter_pair_peptide_sets_file = f"{peptide_sets_out_dir}/{pair[0]}_{pair[1]}".replace(".","-") + ".gmt"
 
-            # TODO: try to make this a function to avoid reduncancy (same code in make_psea_table up to table creation)
-            with tempfile.TemporaryDirectory() as tempdir_scores:
-                processed_scores.to_csv(f"{tempdir_scores}/proc_scores.tsv", sep="\t")
+                write_gmt_from_dict(iter_pair_peptide_sets_file, pair_gmt_dict[ pair ])
+
                 processed_scores, peptide_sets = utils.remove_peptides(
-                    processed_scores, iter_peptide_sets_file
+                    processed_scores, iter_pair_peptide_sets_file
                 )
 
-                titles = []
-                taxa_access = "species_name"
-                used_pairs = []
-                pair_spline_dict = {}
-
-                if not species_taxa_file:
-                    taxa_access = "ID"
-
-                for pair in pairs:
-                    print(f"Working on pair ({pair[0]}, {pair[1]})...")
-
-                    # TODO: figure out how to make this faster as the number of
-                    # possibilities expand (i.e. switch)
-                    if spline_type == "py":
-                        spline_tup = py_delta_by_spline(
-                            processed_scores,
-                            pair
-                        )
-                    else:
-                        spline_tup = r_delta_by_spline(
-                            processed_scores,
-                            pair
-                        )
-                    maxZ = np.apply_over_axes(
-                        np.max,
-                        processed_scores.loc[:, pair],
-                        1
+                if spline_type == "py":
+                    spline_tup = py_delta_by_spline(
+                        processed_scores,
+                        pair
                     )
-                    maxZ = pd.Series(
-                        data=[num for elem in maxZ for num in elem],
-                        index=processed_scores.index
+                else:
+                    spline_tup = r_delta_by_spline(
+                        processed_scores,
+                        pair
                     )
-                    deltaZ = spline_tup[0]
-                    spline_x = np.array(spline_tup[1]["x"])
-                    spline_y = np.array(spline_tup[1]["y"])
-                    pair_spline_dict[pair[0]] = pd.Series(spline_x)
-                    pair_spline_dict[pair[1]] = pd.Series(spline_y)
-                    used_pairs.append(pair)
+                maxZ = np.apply_over_axes(
+                    np.max,
+                    processed_scores.loc[:, pair],
+                    1
+                )
+                maxZ = pd.Series(
+                    data=[num for elem in maxZ for num in elem],
+                    index=processed_scores.index
+                )
+                deltaZ = spline_tup[0]
 
-                    table = INTERNAL.psea(
-                        maxZ,
-                        deltaZ,
-                        peptide_sets,
-                        species_taxa_file,
-                        threshold,
-                        permutation_num,
-                        min_size,
-                        max_size
-                    )
-                    with (ro.default_converter + pandas2ri.converter).context():
-                        table = ro.conversion.get_conversion().rpy2py(table)
+                table = INTERNAL.psea(
+                    maxZ,
+                    deltaZ,
+                    peptide_sets,
+                    species_taxa_file,
+                    threshold,
+                    permutation_num,
+                    min_size,
+                    max_size
+                )
+                with (ro.default_converter + pandas2ri.converter).context():
+                    table = ro.conversion.get_conversion().rpy2py(table)
 
-                    # sort the table by ascending p-value (lowest on top)
-                    table.sort_values(by=["pvalue"], ascending=True)
+                table.to_csv(f"iter-tables/{pair}-{iteration_num}.tsv", sep="\t")
 
-                    # iterate through each row
-                    for index, row in table.iterrows():
+                # sort the table by ascending p-value (lowest on top)
+                table.sort_values(by=["pvalue"], ascending=True)
 
-                        # test for significant species that has not already been used for this pair
-                        if row["pvalue"] < p_val_thresh and np.absolute(row["enrichmentScore"]) > es_thresh \
-                                                    and row["ID"] not in tested_species_dict[pair]:
+                # iterate through each row
+                for index, row in table.iterrows():
 
-                            print(f"Found {row['ID']} in {pair}")
-                            sig_spec_found = True
-                            tested_species_dict[pair].add(row["ID"])
+                    # test for significant species that has not already been used for this pair
+                    if row["pvalue"] < p_val_thresh and np.absolute(row["enrichmentScore"]) > es_thresh \
+                                                and row["ID"] not in tested_species_dict[pair]:
 
-                            # take out all tested peptides from peptide set in gmt for all other species in the gmt
-                            all_tested_peps = set(row["all_tested_peptides"].split("/"))
-                            for gmt_species in gmt_dict.keys():
-                                if gmt_species != row['ID']:
-                                    gmt_dict[ gmt_species ]= gmt_dict[ gmt_species ] - all_tested_peps
+                        print(f"Found {row['species_name']} in {pair} to be significant")
 
-                            # only get top significant species
-                            break
+                        # set sig species found to true for this pair
+                        sig_species_found_dict[ pair ] = True
 
-                iteration_num += 1
+                        tested_species_dict[pair].add(row["ID"])
 
-    # save final filtered gmt file outside of temp dir
-    write_gmt_from_dict(final_gmt_name, gmt_dict)
+                        # take out all tested peptides from peptide set in gmt for all other species in the gmt
+                        all_tested_peps = set(row["all_tested_peptides"].split("/"))
+                        for gmt_species in pair_gmt_dict[ pair ].keys():
+                            if gmt_species != row['ID']:
+                                pair_gmt_dict[pair][ gmt_species ] = pair_gmt_dict[pair][ gmt_species ] - all_tested_peps
 
-    print("==========================\n")
+                        # only get top significant species
+                        break
 
-    # return filtered gmt file name
-    return final_gmt_name
+        iteration_num += 1
+
+    print("\n")
 
 
 def write_gmt_from_dict(outfile_name, gmt_dict)->None:
