@@ -34,8 +34,9 @@ plugin.pipelines.register_function(
         "max_size": Int,
         "permutation_num": Int,
         "spline_type": Str,
+        "degree": Int,
+        "df": Int,
         "table_dir": Str,
-        "threads": Int,
         "pepsirf_binary": Str
     },
     parameter_descriptions={
@@ -60,8 +61,11 @@ plugin.pipelines.register_function(
         "permutation_num": "Number of permutations. Minimal possible nominal"
             " p-value is about 1/perm.",
         "spline_type": "Specifies which spline operation to use.",
+        "degree": "Specifies the degree of the piecewise polynomial. Note: at"
+            " the moment, this will only affect the `cubic` spline approach.",
+        "df": "Degree of freedom to use when fitting the spline. Note: at the"
+            " moment, this will only affect the `cubic` spline approach.",
         "table_dir": "Directory where resulting PSEA tables will be stored.",
-        "threads": "Number of threads with which to run ssGSEA operation.",
         "pepsirf_binary": "Path to pepsirf binary."
     },
     outputs=[("scatter_plot", Visualization), ("volcano_plot", Visualization)],

@@ -2,6 +2,7 @@ import numpy as np
 import os
 import pandas as pd
 import rpy2.robjects as ro
+import q2_PSEA.actions.splines as splines
 import qiime2
 import q2_PSEA.utils as utils
 import tempfile
@@ -9,16 +10,11 @@ import tempfile
 from math import isnan, log, pow
 from rpy2.robjects import pandas2ri
 from rpy2.robjects.packages import importr
-from scipy import interpolate
 from q2_pepsirf.format_types import PepsirfContingencyTSVFormat
 from q2_PSEA.actions.r_functions import INTERNAL
 
 
-cluster_profiler = importr("clusterProfiler")
 pandas2ri.activate()
-
-
-SPLINE_TYPES = ["r", "py"]
 
 
 def make_psea_table(
@@ -33,23 +29,21 @@ def make_psea_table(
         min_size=15,
         max_size=2000,
         permutation_num=10000,  # as per original PSEA code
-        spline_type="r",
+        spline_type="r-smooth",
+        degree=3,
+        df=None,
         table_dir="./psea_table_outdir",
-        threads=4,
         pepsirf_binary="pepsirf"
 ):    
     volcano = ctx.get_action("ps-plot", "volcano")
     zscatter = ctx.get_action("ps-plot", "zscatter")
 
-    assert spline_type in SPLINE_TYPES, f"'{spline_type}' is not a valid spline method!"
+    assert spline_type in splines.SPLINE_TYPES, \
+        f"'{spline_type}' is not a valid spline method!"
+    assert not os.path.exists(table_dir), \
+        f"'{table_dir}' already exists! Please move or remove this directory."
 
-    if not os.path.exists(table_dir):
-        os.mkdir(table_dir)
-    else:
-        print(
-            f"Warning: the directory '{table_dir}' already exists; files may"
-            "be overwritten!"
-        )
+    os.mkdir(table_dir)
 
     with open(pairs_file, "r") as fh:
         pairs = [
@@ -58,9 +52,10 @@ def make_psea_table(
         ]
     scores = pd.read_csv(scores_file, sep="\t", index_col=0)
     processed_scores = process_scores(scores, pairs)
+    processed_scores_file = f"transformed_{scores_file.split('/')[1]}"
 
     with tempfile.TemporaryDirectory() as tempdir:
-        processed_scores.to_csv(f"{tempdir}/proc_scores.tsv", sep="\t")
+        processed_scores.to_csv(processed_scores_file, sep="\t")
         processed_scores, peptide_sets = utils.remove_peptides(
             processed_scores, peptide_sets_file
         )
@@ -70,24 +65,25 @@ def make_psea_table(
         used_pairs = []
         pair_spline_dict = {}
 
+        if not df:
+            df = ro.NULL
         if not species_taxa_file:
             taxa_access = "ID"
 
         for pair in pairs:
             print(f"Working on pair ({pair[0]}, {pair[1]})...")
-        
-            # TODO: figure out how to make this faster as the number of
-            # possibilities expand (i.e. switch)
-            if spline_type == "py":
-                spline_tup = py_delta_by_spline(
-                    processed_scores,
-                    pair
-                )
+            data_sorted = processed_scores.loc[:, pair].sort_values(by=pair[0])
+            x = data_sorted.loc[:, pair[0]].to_numpy()
+            y = data_sorted.loc[:, pair[1]].to_numpy()
+
+            # TODO: optimize with a dictionary, if possible
+            if spline_type == "py-smooth":
+                yfit = splines.smooth_spline(x, y)
+            elif spline_type == "cubic":
+                yfit = splines.R_SPLINES.cubic_spline(x, y, degree, df)
             else:
-                spline_tup = r_delta_by_spline(
-                    processed_scores,
-                    pair
-                )
+                yfit = splines.R_SPLINES.smooth_spline(x, y)
+
             maxZ = np.apply_over_axes(
                 np.max,
                 processed_scores.loc[:, pair],
@@ -97,11 +93,11 @@ def make_psea_table(
                 data=[num for elem in maxZ for num in elem],
                 index=processed_scores.index
             )
-            deltaZ = spline_tup[0]
-            spline_x = np.array(spline_tup[1]["x"])
-            spline_y = np.array(spline_tup[1]["y"])
-            pair_spline_dict[pair[0]] = pd.Series(spline_x)
-            pair_spline_dict[pair[1]] = pd.Series(spline_y)
+            deltaZ = pd.Series(
+                data=y - yfit, index=data_sorted.index
+            ).sort_index()
+            pair_spline_dict[pair[0]] = pd.Series(x)
+            pair_spline_dict[pair[1]] = pd.Series(yfit)
             used_pairs.append(pair)
 
             table = INTERNAL.psea(
@@ -136,7 +132,7 @@ def make_psea_table(
 
         processed_scores_art = ctx.make_artifact(
             type="FeatureTable[Zscore]",
-            view=f"{tempdir}/proc_scores.tsv",
+            view=processed_scores_file,
             view_type=PepsirfContingencyTSVFormat
         )
     
@@ -162,192 +158,6 @@ def make_psea_table(
     return scatter_plot, volcano_plot
 
 
-def py_delta_by_spline(
-    data,
-    timepoints,
-    knots=5,
-    s=None
-) -> tuple:
-    """Finds the maximum value between two samples, and calculates the
-    difference in Z score for each peptide
-
-    Parameters
-    ----------
-    data : pd.DataFrame
-        Matrix of Z scores for sequence
-
-    timepoints : tuple
-        Tuple pair of samples for which to run max spline
-
-    Returns
-    -------
-    tuple
-        Contains maximum Z score, the difference (delta) in actual from
-        predicted Z scores, the spline values for x and y
-    """
-    data_sorted = data.sort_values(by=timepoints[0])
-
-    x = data_sorted.loc[:, timepoints[0]].to_numpy()
-    y = data_sorted.loc[:, timepoints[1]].to_numpy()
-    yfit = spline(x, y, knots, s)
-    deltaZ = y - yfit
-    spline_dict = { "x": x, "y": yfit }
-
-    deltaZ = pd.Series(data=deltaZ, index=data_sorted.index).sort_index()
-    return (deltaZ, spline_dict)
-
-
-def r_delta_by_spline(data, timepoints) -> tuple:
-    """Uses R functions to find the maximum Z score between two points in time,
-    and to calculate spline for time points and the delta
-
-    Parameters
-    ----------
-    data : pd.DataFrame
-        Matrix of Z scores for sequence
-
-    pair : Tuple
-        Tuple pair of samples for which to run max spline
-
-    Returns
-    -------
-    tuple
-        Contains maximum Z score and the difference (delta) in actual from
-        predicted Z scores
-    """
-    rapply = ro.r["apply"]
-    rsmooth_spline = ro.r["smooth.spline"]
-
-    with (ro.default_converter + pandas2ri.converter).context():
-        # TODO: `spline` object ends up coming back as an OrdDict; when passed
-        # to another function, an error is thrown explaining that py2rpy is not
-        # defined for rpy2.rlike.containers.OrdDict; this must be revisted to
-        # fix having to do the spline operation twice
-        spline = rsmooth_spline(
-            data.loc[:, timepoints[0]], data.loc[:, timepoints[1]]
-        )
-        spline = dict(spline)
-        deltaZ = INTERNAL.delta_by_spline(
-            data.loc[:, timepoints[0]], data.loc[:, timepoints[1]]
-        )
-
-    deltaZ = pd.Series(data=deltaZ, index=data.index.to_list())
-    return (deltaZ, spline)
-
-
-def psea(
-    maxZ: pd.Series,
-    deltaZ: pd.Series,
-    peptide_sets_file: str,
-    species_taxa_file: str,
-    threshold: float,
-    permutation_num: int = 0,
-    min_size: int = 15,
-    max_size: int = 500,
-    threads: int = 1,
-    outdir: str = None
-):
-    """Finds the intersection between peptides in `maxZ` with a value greater
-    than `threshold` and those in `deltaZ` which have a value not equal to 0
-
-    Parameters
-    ----------
-    maxZ : pd.Series
-
-    deltaZ : pd.Series
-
-    peptide_sets_file : str
-
-    species_taxa_file : str
-
-    threshold : float
-
-    min_size : int
-
-    max_size : int
-
-    threads : int
-
-    Returns
-    -------
-    SingleSampleGSEA
-        Containes the resulting table with information associating a sample
-        name (Name) to a Term, and the normalized and raw enrichment scores
-        for each Term
-    """
-    # grab indexes where condition is true
-    maxZ_above_thresh = np.where(maxZ > threshold)
-    deltaZ_not_zero = np.where(deltaZ != 0)
-
-    # create peptide list will
-    peptide_list = deltaZ.iloc[
-        np.intersect1d(maxZ_above_thresh, deltaZ_not_zero)
-    ].sort_values(ascending=False)
-
-    # TODO:
-    # 1) ask if `seed` needs to be set, and to what?
-    # 2) ask if `scale` should be True
-    # 3) ask if we want to pass output director to ssgsea
-    # 4) see about if plotting feature is useful and generates the plots we
-    # want (`no_plot`)
-    res = gp.ssgsea(
-        data=peptide_list,
-        gene_sets=peptide_sets_file,
-        sample_norm_method="custom",
-        correl_norm_type="rank",
-        outdir=outdir,
-        min_size=min_size,
-        max_size=max_size,
-        permutation_num=permutation_num,  # TODO: keep in mind this is here
-        # weight_score_type=1, # for earlier versions
-        weight=1,
-        threads=threads
-    )
-
-    # check that species names are important
-    if species_taxa_file is not None:
-        # grab result table and include "Name" column
-        pre_res = res.res2d.loc[:, [
-            "Name", "Term", "ES", "NES", "NOM p-val", "FDR q-val", "FWER p-val"
-        ]]
-        # grab species name to taxanomic ID mapping
-        species_tax_map = pd.read_csv(
-            species_taxa_file,
-            sep="\t",
-            header=None,
-            index_col=0
-        )
-        # match names in PSEA result table with taxanomic IDs
-        names = species_tax_map.index.to_list()
-        for i in range(species_tax_map.iloc[:, 0].size):
-            id = species_tax_map.iloc[i, 0]
-            pre_res["Name"][pre_res.Term == str(id)] = names[i]
-    # otherwise, assume species names are not important
-    else:
-        pre_res = res.res2d.loc[:, [
-            "Term", "ES", "NES", "NOM p-val", "FDR q-val", "FWER p-val"
-        ]]
-
-    # collect names of peptides with max z scores above threshold
-    maxZ_peptides = maxZ.index.to_list()
-    peps_above_thresh = []
-    for i in list(maxZ_above_thresh[0]):
-        peps_above_thresh.append(maxZ_peptides[i])
-    # collect peptides which have max z scores greater than `threshold`
-    tested_peps = res.res2d.loc[:, "Lead_genes"].apply(
-        # joins peptides in a semicolon (;) delimited string
-        lambda peps: ";".join(
-            [pep for pep in np.intersect1d(peps.split(";"), peps_above_thresh)]
-        )
-    )
-    # append tested peptides `pre_res`
-    pre_res.insert(len(pre_res.columns), "Tested Peptides", tested_peps.values)
-
-    return pre_res
-
-
-# TODO: maybe this is the best place to also load zscores to reduce memory
-# usage
 def process_scores(scores, pairs) -> pd.DataFrame:
     """Grabs replicates specified `pairs` from scores matrix and processes
     those remaining scores
@@ -374,27 +184,3 @@ def process_scores(scores, pairs) -> pd.DataFrame:
     return processed_scores.apply(
         lambda row: row.apply(lambda val: log(val, base) - offset)
     )
-
-
-def spline(x, y, knots=3, s=0.788458):
-    """Returns predicted values of `y` based on the given `x` values
-    
-    Parameters
-    ----------
-    x : list(float)
-
-    y : list(float)
-
-    knots : int
-
-    s : float
-
-    Returns
-    -------
-    list(float)
-        Predicted y value for every given x value
-    """
-    x_new = np.linspace(0, 1, knots+2)[1:-1]
-    q_knots = np.quantile(x, x_new)
-    t, c, k = interpolate.splrep(x, y, t=q_knots, s=s)
-    return interpolate.BSpline(t, c, k)(x)
