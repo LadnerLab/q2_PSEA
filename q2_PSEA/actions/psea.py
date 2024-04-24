@@ -31,7 +31,7 @@ def make_psea_table(
         permutation_num=10000,  # as per original PSEA code
         spline_type="r-smooth",
         degree=3,
-        df=None,
+        dof=None,
         table_dir="./psea_table_outdir",
         pepsirf_binary="pepsirf"
 ):    
@@ -63,14 +63,15 @@ def make_psea_table(
         titles = []
         taxa_access = "species_name"
         used_pairs = []
-        pair_spline_dict = {}
+        pair_spline_dict = { "x": list(), "y": list(), "pair": list() }
 
-        if not df:
-            df = ro.NULL
+        if not dof:
+            dof = ro.NULL
         if not species_taxa_file:
             taxa_access = "ID"
 
         for pair in pairs:
+            table_prefix = f"{pair[0]}~{pair[1]}"
             print(f"Working on pair ({pair[0]}, {pair[1]})...")
             data_sorted = processed_scores.loc[:, pair].sort_values(by=pair[0])
             x = data_sorted.loc[:, pair[0]].to_numpy()
@@ -80,7 +81,7 @@ def make_psea_table(
             if spline_type == "py-smooth":
                 yfit = splines.smooth_spline(x, y)
             elif spline_type == "cubic":
-                yfit = splines.R_SPLINES.cubic_spline(x, y, degree, df)
+                yfit = splines.R_SPLINES.cubic_spline(x, y, degree, dof)
             else:
                 yfit = splines.R_SPLINES.smooth_spline(x, y)
 
@@ -96,8 +97,9 @@ def make_psea_table(
             deltaZ = pd.Series(
                 data=y - yfit, index=data_sorted.index
             ).sort_index()
-            pair_spline_dict[pair[0]] = pd.Series(x)
-            pair_spline_dict[pair[1]] = pd.Series(yfit)
+            pair_spline_dict["x"].extend(x.tolist())
+            pair_spline_dict["y"].extend(yfit.tolist())
+            pair_spline_dict["pair"].extend([table_prefix] * len(x))
             used_pairs.append(pair)
 
             table = INTERNAL.psea(
@@ -112,23 +114,22 @@ def make_psea_table(
             )
             with (ro.default_converter + pandas2ri.converter).context():
                 table = ro.conversion.get_conversion().rpy2py(table)
-            prefix = f"{pair[0]}~{pair[1]}"
             table.to_csv(
-                f"{table_dir}/{prefix}_psea_table.tsv",
+                f"{table_dir}/{table_prefix}_psea_table.tsv",
                 sep="\t", index=False
             )
 
             taxa = table.loc[:, taxa_access].to_list()
 
-            titles.append(prefix)
+            titles.append(table_prefix)
 
-            pd.DataFrame(used_pairs).to_csv(
-                f"{tempdir}/used_pairs.tsv", sep="\t",
-                header=False, index=False
-            )
-            pd.DataFrame(pair_spline_dict).to_csv(
-                f"{tempdir}/timepoint_spline_values.tsv", sep="\t", index=False
-            )
+        pd.DataFrame(used_pairs).to_csv(
+            f"{tempdir}/used_pairs.tsv", sep="\t",
+            header=False, index=False
+        )
+        pd.DataFrame(pair_spline_dict).to_csv(
+            f"{tempdir}/spline_data.tsv", sep="\t", index=False
+        )
 
         processed_scores_art = ctx.make_artifact(
             type="FeatureTable[Zscore]",
@@ -139,10 +140,12 @@ def make_psea_table(
         scatter_plot, = zscatter(
             zscores=processed_scores_art,
             pairs_file=f"{tempdir}/used_pairs.tsv",
-            spline_file=f"{tempdir}/timepoint_spline_values.tsv",
+            spline_file=f"{tempdir}/spline_data.tsv",
+            p_val_access="p.adjust",
+            le_peps_access="core_enrichment",
+            taxa_access=taxa_access,
             highlight_data=table_dir,
-            highlight_thresholds=[p_val_thresh],
-            species_taxa_file=species_taxa_file
+            highlight_threshold=p_val_thresh
         )
 
         volcano_plot, = volcano(
@@ -150,7 +153,7 @@ def make_psea_table(
             xy_access=["NES", "p.adjust"],
             taxa_access=taxa_access,
             x_threshold=es_thresh,
-            y_thresholds=[p_val_thresh],
+            y_threshold=p_val_thresh,
             xy_labels=["Enrichment score", "Adjusted p-values"],
             titles=titles
         )
