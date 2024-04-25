@@ -52,7 +52,12 @@ def make_psea_table(
         ]
     scores = pd.read_csv(scores_file, sep="\t", index_col=0)
     processed_scores = process_scores(scores, pairs)
-    processed_scores_file = f"transformed_{scores_file.split('/')[1]}"
+
+    scores_file_split = scores_file.rsplit("/", 1)
+    if len(scores_file_split) > 1:
+        processed_scores_file = f"transformed_{scores_file_split[1]}"
+    else:
+        processed_scores_file = f"transformed_{scores_file_split[0]}"
 
     with tempfile.TemporaryDirectory() as tempdir:
         processed_scores.to_csv(processed_scores_file, sep="\t")
