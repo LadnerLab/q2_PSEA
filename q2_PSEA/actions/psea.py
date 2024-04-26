@@ -68,12 +68,12 @@ def make_psea_table(
                 os.mkdir(iter_tables_dir)
             else:
                 print(
-                    f"Warning: the directory '{iter_tables_dir}' already exists; files may"
+                    f"\nWarning: the directory '{iter_tables_dir}' already exists; files may"
                     " be overwritten!"
                 )
 
         # run iterative peptide analysis, writes to temp_peptide_sets_dir files
-        run_iterative_peptide_analysis(
+        pair_pep_sets_file_dict = run_iterative_peptide_analysis(
             pairs=pairs,
             processed_scores=processed_scores,
             og_peptide_sets_file=peptide_sets_file,
@@ -91,12 +91,12 @@ def make_psea_table(
         )
 
         with tempfile.TemporaryDirectory() as tempdir:
-            processed_scores.to_csv(f"{tempdir}/proc_scores.tsv", sep="\t")
+            processed_scores.to_csv(processed_scores_file, sep="\t")
 
             titles = []
             taxa_access = "species_name"
             used_pairs = []
-            pair_spline_dict = {}
+            pair_spline_dict = { "x": list(), "y": list(), "pair": list() }
 
             if not dof:
                 dof = ro.NULL
@@ -112,9 +112,17 @@ def make_psea_table(
 
                 # each pair has a different peptide set file
                 processed_scores, peptide_sets = utils.remove_peptides(
-                    processed_scores, f"{temp_peptide_sets_dir}/{pair[0]}_{pair[1]}".replace(".","-") + ".gmt"
+                    processed_scores, pair_pep_sets_file_dict[ pair ]
                 )
-            
+                
+                # TODO: optimize with a dictionary, if possible
+                if spline_type == "py-smooth":
+                    yfit = splines.smooth_spline(x, y)
+                elif spline_type == "cubic":
+                    yfit = splines.R_SPLINES.cubic_spline(x, y, degree, dof)
+                else:
+                    yfit = splines.R_SPLINES.smooth_spline(x, y)
+
                 maxZ = np.apply_over_axes(
                     np.max,
                     processed_scores.loc[:, pair],
@@ -235,7 +243,7 @@ def run_iterative_peptide_analysis(
     peptide_sets_out_dir,
     iter_tables_dir,
     get_iter_tables
-    ) -> None:
+    ) -> dict:
 
     iteration_num = 1
     
@@ -259,6 +267,9 @@ def run_iterative_peptide_analysis(
         sig_species_found_dict[ pair ] = True
         tested_species_dict[ pair ] = set()
 
+    # keep a dict for the output gmt file of each pair
+    pair_sets_filename_dict = dict()
+
     # loop until no other significant peptides were found
     while any(sig_species_found_dict.values()):
 
@@ -275,12 +286,12 @@ def run_iterative_peptide_analysis(
                 sig_species_found_dict[ pair ] = False
 
                 # create gmt file for this pair (filtered gmt from prev iteration)
-                iter_pair_peptide_sets_file = f"{peptide_sets_out_dir}/{pair[0]}_{pair[1]}".replace(".","-") + ".gmt"
+                pair_sets_filename_dict[ pair ] = f"{peptide_sets_out_dir}/{pair[0]}_{pair[1]}".replace(".","-") + ".gmt"
 
-                write_gmt_from_dict(iter_pair_peptide_sets_file, pair_gmt_dict[ pair ])
+                write_gmt_from_dict(pair_sets_filename_dict[ pair ], pair_gmt_dict[ pair ])
 
                 processed_scores, peptide_sets = utils.remove_peptides(
-                    processed_scores, iter_pair_peptide_sets_file
+                    processed_scores, pair_sets_filename_dict[ pair ]
                 )
 
                 # TODO: optimize with a dictionary, if possible
@@ -303,10 +314,6 @@ def run_iterative_peptide_analysis(
                 deltaZ = pd.Series(
                     data=y - yfit, index=data_sorted.index
                 ).sort_index()
-                pair_spline_dict["x"].extend(x.tolist())
-                pair_spline_dict["y"].extend(yfit.tolist())
-                pair_spline_dict["pair"].extend([table_prefix] * len(x))
-                used_pairs.append(pair)
 
                 table = INTERNAL.psea(
                     maxZ,
@@ -349,7 +356,8 @@ def run_iterative_peptide_analysis(
 
         iteration_num += 1
 
-    print("\n")
+    print("End of Iterative Peptide Analysis\n")
+    return pair_sets_filename_dict
 
 
 def write_gmt_from_dict(outfile_name, gmt_dict)->None:

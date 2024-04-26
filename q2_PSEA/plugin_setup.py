@@ -37,7 +37,6 @@ plugin.pipelines.register_function(
         "degree": Int,
         "dof": Int,
         "table_dir": Str,
-        "threads": Int,
         "pepsirf_binary": Str,
         "iter_tables_dir": Str,
         "get_iter_tables": Bool
@@ -69,7 +68,6 @@ plugin.pipelines.register_function(
         "dof": "Degree of freedom to use when fitting the spline. Note: at the"
             " moment, this will only affect the `cubic` spline approach.",
         "table_dir": "Directory where resulting PSEA tables will be stored.",
-        "threads": "Number of threads with which to run ssGSEA operation.",
         "pepsirf_binary": "Path to pepsirf binary.",
         "iter_tables_dir": "Directory name to output iteration tables to.",
         "get_iter_tables": "Boolean value, whether or not iteration tables should be outputted."
