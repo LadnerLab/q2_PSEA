@@ -34,6 +34,7 @@ def make_psea_table(
         dof=None,
         table_dir="./psea_table_outdir",
         pepsirf_binary="pepsirf",
+        iterative_analysis=True,
         iter_tables_dir="./psea_iter_tables_outdir",
         get_iter_tables=False
 ):    
@@ -63,32 +64,38 @@ def make_psea_table(
 
     # temporary directory to hold iterative analysis tables
     with tempfile.TemporaryDirectory() as temp_peptide_sets_dir:
-        if get_iter_tables:
-            if not os.path.exists(iter_tables_dir):
-                os.mkdir(iter_tables_dir)
-            else:
-                print(
-                    f"\nWarning: the directory '{iter_tables_dir}' already exists; files may"
-                    " be overwritten!"
-                )
+        if iterative_analysis:
+            if get_iter_tables:
+                if not os.path.exists(iter_tables_dir):
+                    os.mkdir(iter_tables_dir)
+                else:
+                    print(
+                        f"\nWarning: the directory '{iter_tables_dir}' already exists; files may"
+                        " be overwritten!"
+                    )
 
-        # run iterative peptide analysis, writes to temp_peptide_sets_dir files
-        pair_pep_sets_file_dict = run_iterative_peptide_analysis(
-            pairs=pairs,
-            processed_scores=processed_scores,
-            og_peptide_sets_file=peptide_sets_file,
-            species_taxa_file=species_taxa_file,
-            threshold=threshold,
-            permutation_num=permutation_num,
-            min_size=min_size,
-            max_size=max_size,
-            spline_type=spline_type,
-            p_val_thresh=p_val_thresh,
-            es_thresh=es_thresh,
-            peptide_sets_out_dir = temp_peptide_sets_dir,
-            iter_tables_dir=iter_tables_dir,
-            get_iter_tables=get_iter_tables
-        )
+            # run iterative peptide analysis, writes to temp_peptide_sets_dir files
+            pair_pep_sets_file_dict = run_iterative_peptide_analysis(
+                pairs=pairs,
+                processed_scores=processed_scores,
+                og_peptide_sets_file=peptide_sets_file,
+                species_taxa_file=species_taxa_file,
+                threshold=threshold,
+                permutation_num=permutation_num,
+                min_size=min_size,
+                max_size=max_size,
+                spline_type=spline_type,
+                degree=degree,
+                dof=dof,
+                p_val_thresh=p_val_thresh,
+                es_thresh=es_thresh,
+                peptide_sets_out_dir = temp_peptide_sets_dir,
+                iter_tables_dir=iter_tables_dir,
+                get_iter_tables=get_iter_tables
+            )
+        else:
+            # each pair will have the same gmt file
+            pair_pep_sets_file_dict = dict.fromkeys(pairs, peptide_sets_file)
 
         with tempfile.TemporaryDirectory() as tempdir:
             processed_scores.to_csv(processed_scores_file, sep="\t")
@@ -106,14 +113,15 @@ def make_psea_table(
             for pair in pairs:
                 table_prefix = f"{pair[0]}~{pair[1]}"
                 print(f"Working on pair ({pair[0]}, {pair[1]})...")
-                data_sorted = processed_scores.loc[:, pair].sort_values(by=pair[0])
-                x = data_sorted.loc[:, pair[0]].to_numpy()
-                y = data_sorted.loc[:, pair[1]].to_numpy()
 
                 # each pair has a different peptide set file
                 processed_scores, peptide_sets = utils.remove_peptides(
                     processed_scores, pair_pep_sets_file_dict[ pair ]
                 )
+
+                data_sorted = processed_scores.loc[:, pair].sort_values(by=pair[0])
+                x = data_sorted.loc[:, pair[0]].to_numpy()
+                y = data_sorted.loc[:, pair[1]].to_numpy()
                 
                 # TODO: optimize with a dictionary, if possible
                 if spline_type == "py-smooth":
@@ -238,6 +246,8 @@ def run_iterative_peptide_analysis(
     min_size,
     max_size,
     spline_type,
+    degree,
+    dof,
     p_val_thresh,
     es_thresh,
     peptide_sets_out_dir,
@@ -275,13 +285,17 @@ def run_iterative_peptide_analysis(
 
         print("\nIteration:", iteration_num)
 
+        if get_iter_tables:
+            iter_out_dir = f"{iter_tables_dir}/Iteration_{iteration_num}"
+            if not os.path.exists(iter_out_dir):
+                os.mkdir(iter_out_dir)
+
+        if not dof:
+            dof = ro.NULL
+
         for pair in pairs:
             if( sig_species_found_dict[ pair ] ):
-                table_prefix = f"{pair[0]}~{pair[1]}"
                 print(f"Working on pair ({pair[0]}, {pair[1]})...")
-                data_sorted = processed_scores.loc[:, pair].sort_values(by=pair[0])
-                x = data_sorted.loc[:, pair[0]].to_numpy()
-                y = data_sorted.loc[:, pair[1]].to_numpy()
 
                 sig_species_found_dict[ pair ] = False
 
@@ -293,6 +307,10 @@ def run_iterative_peptide_analysis(
                 processed_scores, peptide_sets = utils.remove_peptides(
                     processed_scores, pair_sets_filename_dict[ pair ]
                 )
+
+                data_sorted = processed_scores.loc[:, pair].sort_values(by=pair[0])
+                x = data_sorted.loc[:, pair[0]].to_numpy()
+                y = data_sorted.loc[:, pair[1]].to_numpy()
 
                 # TODO: optimize with a dictionary, if possible
                 if spline_type == "py-smooth":
@@ -330,6 +348,9 @@ def run_iterative_peptide_analysis(
 
                 # sort the table by ascending p-value (lowest on top)
                 table.sort_values(by=["pvalue"], ascending=True)
+
+                if get_iter_tables:
+                    table.to_csv(f"{iter_out_dir}/{pair}.tsv", sep="\t")
 
                 # iterate through each row
                 for index, row in table.iterrows():
