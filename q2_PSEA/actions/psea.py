@@ -34,7 +34,7 @@ def make_psea_table(
         dof=None,
         table_dir="./psea_table_outdir",
         pepsirf_binary="pepsirf",
-        iterative_analysis=True,
+        iterative_analysis=False,
         iter_tables_dir="./psea_iter_tables_outdir",
         get_iter_tables=False
 ):    
@@ -45,6 +45,9 @@ def make_psea_table(
         f"'{spline_type}' is not a valid spline method!"
     assert not os.path.exists(table_dir), \
         f"'{table_dir}' already exists! Please move or remove this directory."
+    if iterative_analysis:
+        assert ".gmt" in peptide_sets_file.lower(), \
+            "You are running iterative analysis without a GMT peptide sets file."
 
     os.mkdir(table_dir)
 
