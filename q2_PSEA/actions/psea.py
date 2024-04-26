@@ -14,12 +14,7 @@ from q2_pepsirf.format_types import PepsirfContingencyTSVFormat
 from q2_PSEA.actions.r_functions import INTERNAL
 
 
-cluster_profiler = importr("clusterProfiler")
 pandas2ri.activate()
-
-
-
-SPLINE_TYPES = ["r", "py"]
 
 
 def make_psea_table(
@@ -34,9 +29,10 @@ def make_psea_table(
         min_size=15,
         max_size=2000,
         permutation_num=10000,  # as per original PSEA code
-        spline_type="r",
+        spline_type="r-smooth",
+        degree=3,
+        dof=None,
         table_dir="./psea_table_outdir",
-        threads=4,
         pepsirf_binary="pepsirf",
         iter_tables_dir="./psea_iter_tables_outdir",
         get_iter_tables=False
@@ -44,15 +40,12 @@ def make_psea_table(
     volcano = ctx.get_action("ps-plot", "volcano")
     zscatter = ctx.get_action("ps-plot", "zscatter")
 
-    assert spline_type in SPLINE_TYPES, f"'{spline_type}' is not a valid spline method!"
+    assert spline_type in splines.SPLINE_TYPES, \
+        f"'{spline_type}' is not a valid spline method!"
+    assert not os.path.exists(table_dir), \
+        f"'{table_dir}' already exists! Please move or remove this directory."
 
-    if not os.path.exists(table_dir):
-        os.mkdir(table_dir)
-    else:
-        print(
-            f"Warning: the directory '{table_dir}' already exists; files may"
-            " be overwritten!"
-        )
+    os.mkdir(table_dir)
 
     with open(pairs_file, "r") as fh:
         pairs = [
@@ -62,6 +55,13 @@ def make_psea_table(
     scores = pd.read_csv(scores_file, sep="\t", index_col=0)
     processed_scores = process_scores(scores, pairs)
 
+    scores_file_split = scores_file.rsplit("/", 1)
+    if len(scores_file_split) > 1:
+        processed_scores_file = f"transformed_{scores_file_split[1]}"
+    else:
+        processed_scores_file = f"transformed_{scores_file_split[0]}"
+
+    # temporary directory to hold iterative analysis tables
     with tempfile.TemporaryDirectory() as temp_peptide_sets_dir:
         if get_iter_tables:
             if not os.path.exists(iter_tables_dir):
@@ -99,28 +99,23 @@ def make_psea_table(
             used_pairs = []
             pair_spline_dict = {}
 
+            if not dof:
+                dof = ro.NULL
             if not species_taxa_file:
                 taxa_access = "ID"
 
             for pair in pairs:
+                table_prefix = f"{pair[0]}~{pair[1]}"
                 print(f"Working on pair ({pair[0]}, {pair[1]})...")
+                data_sorted = processed_scores.loc[:, pair].sort_values(by=pair[0])
+                x = data_sorted.loc[:, pair[0]].to_numpy()
+                y = data_sorted.loc[:, pair[1]].to_numpy()
 
+                # each pair has a different peptide set file
                 processed_scores, peptide_sets = utils.remove_peptides(
                     processed_scores, f"{temp_peptide_sets_dir}/{pair[0]}_{pair[1]}".replace(".","-") + ".gmt"
                 )
             
-                # TODO: figure out how to make this faster as the number of
-                # possibilities expand (i.e. switch)
-                if spline_type == "py":
-                    spline_tup = py_delta_by_spline(
-                        processed_scores,
-                        pair
-                    )
-                else:
-                    spline_tup = r_delta_by_spline(
-                        processed_scores,
-                        pair
-                    )
                 maxZ = np.apply_over_axes(
                     np.max,
                     processed_scores.loc[:, pair],
@@ -130,11 +125,12 @@ def make_psea_table(
                     data=[num for elem in maxZ for num in elem],
                     index=processed_scores.index
                 )
-                deltaZ = spline_tup[0]
-                spline_x = np.array(spline_tup[1]["x"])
-                spline_y = np.array(spline_tup[1]["y"])
-                pair_spline_dict[pair[0]] = pd.Series(spline_x)
-                pair_spline_dict[pair[1]] = pd.Series(spline_y)
+                deltaZ = pd.Series(
+                    data=y - yfit, index=data_sorted.index
+                ).sort_index()
+                pair_spline_dict["x"].extend(x.tolist())
+                pair_spline_dict["y"].extend(yfit.tolist())
+                pair_spline_dict["pair"].extend([table_prefix] * len(x))
                 used_pairs.append(pair)
 
                 table = INTERNAL.psea(
@@ -149,38 +145,39 @@ def make_psea_table(
                 )
                 with (ro.default_converter + pandas2ri.converter).context():
                     table = ro.conversion.get_conversion().rpy2py(table)
-
-                prefix = f"{pair[0]}~{pair[1]}"
                 table.to_csv(
-                    f"{table_dir}/{prefix}_psea_table.tsv",
+                    f"{table_dir}/{table_prefix}_psea_table.tsv",
                     sep="\t", index=False
                 )
 
                 taxa = table.loc[:, taxa_access].to_list()
 
-                titles.append(prefix)
+                titles.append(table_prefix)
 
-                pd.DataFrame(used_pairs).to_csv(
-                    f"{tempdir}/used_pairs.tsv", sep="\t",
-                    header=False, index=False
-                )
-                pd.DataFrame(pair_spline_dict).to_csv(
-                    f"{tempdir}/timepoint_spline_values.tsv", sep="\t", index=False
-                )
+
+            pd.DataFrame(used_pairs).to_csv(
+                f"{tempdir}/used_pairs.tsv", sep="\t",
+                header=False, index=False
+            )
+            pd.DataFrame(pair_spline_dict).to_csv(
+                f"{tempdir}/spline_data.tsv", sep="\t", index=False
+            )
 
             processed_scores_art = ctx.make_artifact(
                 type="FeatureTable[Zscore]",
-                view=f"{tempdir}/proc_scores.tsv",
+                view=processed_scores_file,
                 view_type=PepsirfContingencyTSVFormat
             )
         
             scatter_plot, = zscatter(
                 zscores=processed_scores_art,
                 pairs_file=f"{tempdir}/used_pairs.tsv",
-                spline_file=f"{tempdir}/timepoint_spline_values.tsv",
+                spline_file=f"{tempdir}/spline_data.tsv",
+                p_val_access="p.adjust",
+                le_peps_access="core_enrichment",
+                taxa_access=taxa_access,
                 highlight_data=table_dir,
-                highlight_thresholds=[p_val_thresh],
-                species_taxa_file=species_taxa_file
+                highlight_threshold=p_val_thresh
             )
 
             volcano_plot, = volcano(
@@ -188,7 +185,7 @@ def make_psea_table(
                 xy_access=["NES", "p.adjust"],
                 taxa_access=taxa_access,
                 x_threshold=es_thresh,
-                y_thresholds=[p_val_thresh],
+                y_threshold=p_val_thresh,
                 xy_labels=["Enrichment score", "Adjusted p-values"],
                 titles=titles
             )
@@ -480,7 +477,11 @@ def run_iterative_peptide_analysis(
 
         for pair in pairs:
             if( sig_species_found_dict[ pair ] ):
+                table_prefix = f"{pair[0]}~{pair[1]}"
                 print(f"Working on pair ({pair[0]}, {pair[1]})...")
+                data_sorted = processed_scores.loc[:, pair].sort_values(by=pair[0])
+                x = data_sorted.loc[:, pair[0]].to_numpy()
+                y = data_sorted.loc[:, pair[1]].to_numpy()
 
                 sig_species_found_dict[ pair ] = False
 
@@ -493,16 +494,14 @@ def run_iterative_peptide_analysis(
                     processed_scores, iter_pair_peptide_sets_file
                 )
 
-                if spline_type == "py":
-                    spline_tup = py_delta_by_spline(
-                        processed_scores,
-                        pair
-                    )
+                # TODO: optimize with a dictionary, if possible
+                if spline_type == "py-smooth":
+                    yfit = splines.smooth_spline(x, y)
+                elif spline_type == "cubic":
+                    yfit = splines.R_SPLINES.cubic_spline(x, y, degree, dof)
                 else:
-                    spline_tup = r_delta_by_spline(
-                        processed_scores,
-                        pair
-                    )
+                    yfit = splines.R_SPLINES.smooth_spline(x, y)
+
                 maxZ = np.apply_over_axes(
                     np.max,
                     processed_scores.loc[:, pair],
@@ -512,7 +511,13 @@ def run_iterative_peptide_analysis(
                     data=[num for elem in maxZ for num in elem],
                     index=processed_scores.index
                 )
-                deltaZ = spline_tup[0]
+                deltaZ = pd.Series(
+                    data=y - yfit, index=data_sorted.index
+                ).sort_index()
+                pair_spline_dict["x"].extend(x.tolist())
+                pair_spline_dict["y"].extend(yfit.tolist())
+                pair_spline_dict["pair"].extend([table_prefix] * len(x))
+                used_pairs.append(pair)
 
                 table = INTERNAL.psea(
                     maxZ,
@@ -526,13 +531,6 @@ def run_iterative_peptide_analysis(
                 )
                 with (ro.default_converter + pandas2ri.converter).context():
                     table = ro.conversion.get_conversion().rpy2py(table)
-
-                if get_iter_tables:
-                    if not os.path.exists(f"{iter_tables_dir}/Iteration-{iteration_num}"):
-                        os.mkdir(f"{iter_tables_dir}/Iteration-{iteration_num}")
-                        
-                    table.to_csv(f"{iter_tables_dir}/Iteration-{iteration_num}/{pair}.tsv", sep="\t")
-
 
                 # sort the table by ascending p-value (lowest on top)
                 table.sort_values(by=["pvalue"], ascending=True)
