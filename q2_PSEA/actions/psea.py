@@ -92,16 +92,16 @@ def make_psea_table(
 
             maxZ = np.apply_over_axes(
                 np.max,
-                processed_scores.loc[:, pair],
+                data_sorted.loc[:, pair],
                 1
             )
             maxZ = pd.Series(
                 data=[num for elem in maxZ for num in elem],
-                index=processed_scores.index
-            ).sort_index()
+                index=data_sorted.index
+            )
             deltaZ = pd.Series(
                 data=y - yfit, index=data_sorted.index
-            ).sort_index()
+            )
             pair_spline_dict["x"].extend(x.tolist())
             pair_spline_dict["y"].extend(yfit.tolist())
             pair_spline_dict["pair"].extend([table_prefix] * len(x))
