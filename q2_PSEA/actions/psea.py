@@ -98,7 +98,7 @@ def make_psea_table(
             maxZ = pd.Series(
                 data=[num for elem in maxZ for num in elem],
                 index=processed_scores.index
-            )
+            ).sort_index()
             deltaZ = pd.Series(
                 data=y - yfit, index=data_sorted.index
             ).sort_index()
