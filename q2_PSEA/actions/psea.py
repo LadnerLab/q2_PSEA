@@ -125,7 +125,7 @@ def make_psea_table(
                 data_sorted = processed_scores.loc[:, pair].sort_values(by=pair[0])
                 x = data_sorted.loc[:, pair[0]].to_numpy()
                 y = data_sorted.loc[:, pair[1]].to_numpy()
-                
+
                 # TODO: optimize with a dictionary, if possible
                 if spline_type == "py-smooth":
                     yfit = splines.smooth_spline(x, y)
@@ -136,16 +136,16 @@ def make_psea_table(
 
                 maxZ = np.apply_over_axes(
                     np.max,
-                    processed_scores.loc[:, pair],
+                    data_sorted.loc[:, pair],
                     1
                 )
                 maxZ = pd.Series(
                     data=[num for elem in maxZ for num in elem],
-                    index=processed_scores.index
+                    index=data_sorted.index
                 )
                 deltaZ = pd.Series(
                     data=y - yfit, index=data_sorted.index
-                ).sort_index()
+                )
                 pair_spline_dict["x"].extend(x.tolist())
                 pair_spline_dict["y"].extend(yfit.tolist())
                 pair_spline_dict["pair"].extend([table_prefix] * len(x))
