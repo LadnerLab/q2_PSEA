@@ -1,6 +1,16 @@
 from rpy2.robjects.packages import SignatureTranslatedAnonymousPackage
 
 r_functions = """
+delta_by_spline <- function(timepoint1, timepoint2)
+{
+    SS <- smooth.spline(timepoint1, timepoint2)
+    deltaZ <- timepoint2 - predict(SS, timepoint1)$y
+
+    names(deltaZ) <- rownames(deltaZ)
+
+    return(deltaZ)
+}
+
 psea <- function(
         maxZ,
         deltaZ,
