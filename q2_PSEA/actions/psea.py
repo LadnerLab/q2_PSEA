@@ -118,58 +118,72 @@ def make_psea_table(
             if not species_taxa_file:
                 taxa_access = "ID"
 
+            '''
+            with concurrent.futures.ProcessPoolExecutor() as executor:
+                pair_futures = [executor.submit(create_fgsea_table_for_pair,
+                                pair,
+                                processed_scores,
+                                pair_pep_sets_file_dict[ pair ],
+                                species_taxa_file,
+                                threshold,
+                                permutation_num,
+                                min_size,
+                                max_size,
+                                spline_type,
+                                degree,
+                                dof,
+                                p_val_thresh,
+                                es_thresh,
+                                False
+                                ) for pair in pairs]
+
+                concurrent.futures.wait(pair_futures, timeout=None, return_when=concurrent.futures.ALL_COMPLETED)
+
+                for future in pair_futures:
+                    result = future.result()
+                    table = result[0]
+                    x = result[1]
+                    y = result[2]
+
+                    pair_spline_dict["x"].extend(x.tolist())
+                    pair_spline_dict["y"].extend(yfit.tolist())
+                    pair_spline_dict["pair"].extend([table_prefix] * len(x))
+                    used_pairs.append(pair)
+
+                    table.to_csv(
+                        f"{table_dir}/{table_prefix}_psea_table.tsv",
+                        sep="\t", index=False
+                    )
+
+                    taxa = table.loc[:, taxa_access].to_list()
+
+                    titles.append(table_prefix)
+            '''
             for pair in pairs:
                 table_prefix = f"{pair[0]}~{pair[1]}"
-                print(f"Working on pair ({pair[0]}, {pair[1]})...")
 
-                # each pair has a different peptide set file
-                processed_scores, peptide_sets = utils.remove_peptides(
-                    processed_scores, pair_pep_sets_file_dict[ pair ]
-                )
+                table, x, yfit = create_fgsea_table_for_pair(
+                                        pair=pair,
+                                        processed_scores=processed_scores,
+                                        pep_sets_file=pair_pep_sets_file_dict[ pair ],
+                                        species_taxa_file=species_taxa_file,
+                                        threshold=threshold,
+                                        permutation_num=permutation_num,
+                                        min_size=min_size,
+                                        max_size=max_size,
+                                        spline_type=spline_type,
+                                        degree=degree,
+                                        dof=dof,
+                                        p_val_thresh=p_val_thresh,
+                                        es_thresh=es_thresh,
+                                        iteration=False
+                                        )
 
-                data_sorted = processed_scores.loc[:, pair].sort_values(by=pair[0])
-                x = data_sorted.loc[:, pair[0]].to_numpy()
-                y = data_sorted.loc[:, pair[1]].to_numpy()
-
-                # TODO: optimize with a dictionary, if possible
-                # Note: changes here should be added to iterative function aswell
-                # TODO: possibly make this part a function to reduce redundant code
-                if spline_type == "py-smooth":
-                    yfit = splines.smooth_spline(x, y)
-                elif spline_type == "cubic":
-                    yfit = splines.R_SPLINES.cubic_spline(x, y, degree, dof)
-                else:
-                    yfit = splines.R_SPLINES.smooth_spline(x, y)
-
-                maxZ = np.apply_over_axes(
-                    np.max,
-                    data_sorted.loc[:, pair],
-                    1
-                )
-                maxZ = pd.Series(
-                    data=[num for elem in maxZ for num in elem],
-                    index=data_sorted.index
-                )
-                deltaZ = pd.Series(
-                    data=y - yfit, index=data_sorted.index
-                )
                 pair_spline_dict["x"].extend(x.tolist())
                 pair_spline_dict["y"].extend(yfit.tolist())
                 pair_spline_dict["pair"].extend([table_prefix] * len(x))
                 used_pairs.append(pair)
 
-                table = INTERNAL.psea(
-                    maxZ,
-                    deltaZ,
-                    peptide_sets,
-                    species_taxa_file,
-                    threshold,
-                    permutation_num,
-                    min_size,
-                    max_size
-                )
-                with (ro.default_converter + pandas2ri.converter).context():
-                    table = ro.conversion.get_conversion().rpy2py(table)
                 table.to_csv(
                     f"{table_dir}/{table_prefix}_psea_table.tsv",
                     sep="\t", index=False
@@ -220,6 +234,73 @@ def make_psea_table(
     print(f"Finished in {round(end_time-start_time, 2)} seconds")
     
     return scatter_plot, volcano_plot
+
+
+def create_fgsea_table_for_pair(
+    pair,
+    processed_scores,
+    pep_sets_file,
+    species_taxa_file,
+    threshold,
+    permutation_num,
+    min_size,
+    max_size,
+    spline_type,
+    degree,
+    dof,
+    p_val_thresh,
+    es_thresh,
+    iteration
+    ):
+    print(f"Working on pair ({pair[0]}, {pair[1]})...")
+
+    # each pair has a different peptide set file
+    processed_scores, peptide_sets = utils.remove_peptides(
+        processed_scores, pep_sets_file
+    )
+
+    data_sorted = processed_scores.loc[:, pair].sort_values(by=pair[0])
+    x = data_sorted.loc[:, pair[0]].to_numpy()
+    y = data_sorted.loc[:, pair[1]].to_numpy()
+
+    # TODO: optimize with a dictionary, if possible
+    if spline_type == "py-smooth":
+        yfit = splines.smooth_spline(x, y)
+    elif spline_type == "cubic":
+        yfit = splines.R_SPLINES.cubic_spline(x, y, degree, dof)
+    else:
+        yfit = splines.R_SPLINES.smooth_spline(x, y)
+
+    maxZ = np.apply_over_axes(
+        np.max,
+        data_sorted.loc[:, pair],
+        1
+    )
+    maxZ = pd.Series(
+        data=[num for elem in maxZ for num in elem],
+        index=data_sorted.index
+    )
+    deltaZ = pd.Series(
+        data=y - yfit, index=data_sorted.index
+    )
+
+    table = INTERNAL.psea(
+        maxZ,
+        deltaZ,
+        peptide_sets,
+        species_taxa_file,
+        threshold,
+        permutation_num,
+        min_size,
+        max_size
+    )
+    with (ro.default_converter + pandas2ri.converter).context():
+        table = ro.conversion.get_conversion().rpy2py(table)
+
+    if iteration:
+        return table
+
+    return table, x, yfit
 
 
 def process_scores(scores, pairs) -> pd.DataFrame:
@@ -305,7 +386,7 @@ def run_iterative_peptide_analysis(
                 os.mkdir(iter_out_dir)
 
         # -------------------------------
-        # note: rpy2 is not compatible with threading
+        # note: rpy2 is not compatible with multithreading, only multiprocessing
         with concurrent.futures.ProcessPoolExecutor() as executor:
             pair_futures = [executor.submit(run_iterative_process_single_pair,
                             pair, 
@@ -364,8 +445,6 @@ def run_iterative_process_single_pair(
     if not dof:
         dof = ro.NULL
 
-    print(f"Working on pair ({pair[0]}, {pair[1]})...")
-
     sig_species_found = False
 
     # create gmt file for this pair (filtered gmt from prev iteration)
@@ -373,47 +452,22 @@ def run_iterative_process_single_pair(
 
     write_gmt_from_dict(pair_sets_filename, gmt_dict)
 
-    processed_scores, peptide_sets = utils.remove_peptides(
-        processed_scores, pair_sets_filename
-    )
-
-    data_sorted = processed_scores.loc[:, pair].sort_values(by=pair[0])
-    x = data_sorted.loc[:, pair[0]].to_numpy()
-    y = data_sorted.loc[:, pair[1]].to_numpy()
-
-    # TODO: optimize with a dictionary, if possible
-    if spline_type == "py-smooth":
-        yfit = splines.smooth_spline(x, y)
-    elif spline_type == "cubic":
-        yfit = splines.R_SPLINES.cubic_spline(x, y, degree, dof)
-    else:
-        yfit = splines.R_SPLINES.smooth_spline(x, y)
-
-    maxZ = np.apply_over_axes(
-        np.max,
-        processed_scores.loc[:, pair],
-        1
-    )
-    maxZ = pd.Series(
-        data=[num for elem in maxZ for num in elem],
-        index=processed_scores.index
-    )
-    deltaZ = pd.Series(
-        data=y - yfit, index=data_sorted.index
-    ).sort_index()
-
-    table = INTERNAL.psea(
-        maxZ,
-        deltaZ,
-        peptide_sets,
-        species_taxa_file,
-        threshold,
-        permutation_num,
-        min_size,
-        max_size
-    )
-    with (ro.default_converter + pandas2ri.converter).context():
-        table = ro.conversion.get_conversion().rpy2py(table)
+    table = create_fgsea_table_for_pair(
+                                        pair=pair,
+                                        processed_scores=processed_scores,
+                                        pep_sets_file=pair_sets_filename,
+                                        species_taxa_file=species_taxa_file,
+                                        threshold=threshold,
+                                        permutation_num=permutation_num,
+                                        min_size=min_size,
+                                        max_size=max_size,
+                                        spline_type=spline_type,
+                                        degree=degree,
+                                        dof=dof,
+                                        p_val_thresh=p_val_thresh,
+                                        es_thresh=es_thresh,
+                                        iteration = True
+                                        )
 
     # sort the table by ascending p-value (lowest on top)
     table.sort_values(by=["pvalue"], ascending=True)
