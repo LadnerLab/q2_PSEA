@@ -113,12 +113,16 @@ def make_psea_table(
             used_pairs = []
             pair_spline_dict = { "x": list(), "y": list(), "pair": list() }
 
+
             if not dof:
                 dof = ro.NULL
             if not species_taxa_file:
                 taxa_access = "ID"
 
-            '''
+            ''' 
+            -----------
+            Not working 
+            -----------
             with concurrent.futures.ProcessPoolExecutor() as executor:
                 pair_futures = [executor.submit(create_fgsea_table_for_pair,
                                 pair,
@@ -137,9 +141,7 @@ def make_psea_table(
                                 False
                                 ) for pair in pairs]
 
-                concurrent.futures.wait(pair_futures, timeout=None, return_when=concurrent.futures.ALL_COMPLETED)
-
-                for future in pair_futures:
+                for future in concurrent.futures.as_completed(pair_futures):
                     result = future.result()
                     table = result[0]
                     x = result[1]
@@ -159,10 +161,11 @@ def make_psea_table(
 
                     titles.append(table_prefix)
             '''
+
             for pair in pairs:
                 table_prefix = f"{pair[0]}~{pair[1]}"
 
-                table, x, yfit = create_fgsea_table_for_pair(
+                result = create_fgsea_table_for_pair(
                                         pair=pair,
                                         processed_scores=processed_scores,
                                         pep_sets_file=pair_pep_sets_file_dict[ pair ],
@@ -178,6 +181,9 @@ def make_psea_table(
                                         es_thresh=es_thresh,
                                         iteration=False
                                         )
+                table = result[0]
+                x = result[1]
+                yfit = result[2]
 
                 pair_spline_dict["x"].extend(x.tolist())
                 pair_spline_dict["y"].extend(yfit.tolist())
@@ -234,6 +240,50 @@ def make_psea_table(
     print(f"Finished in {round(end_time-start_time, 2)} seconds")
     
     return scatter_plot, volcano_plot
+
+
+'''
+-----------------------------------
+Tried to pass more simple arguments
+-----------------------------------
+def create_fgsea_table_helper(
+    pair,
+    processed_scores_file,
+    pep_sets_file,
+    species_taxa_file,
+    threshold,
+    permutation_num,
+    min_size,
+    max_size,
+    spline_type,
+    degree,
+    dof,
+    p_val_thresh,
+    es_thresh
+    ):
+    if not dof:
+        dof = ro.NULL
+
+    processed_scores = pd.read_csv(processed_scores_file, sep="\t", index_col=0)
+
+    table, x, yfit = create_fgsea_table_for_pair(
+                                    pair=pair,
+                                    processed_scores=processed_scores,
+                                    pep_sets_file=pep_sets_file,
+                                    species_taxa_file=species_taxa_file,
+                                    threshold=threshold,
+                                    permutation_num=permutation_num,
+                                    min_size=min_size,
+                                    max_size=max_size,
+                                    spline_type=spline_type,
+                                    degree=degree,
+                                    dof=dof,
+                                    p_val_thresh=p_val_thresh,
+                                    es_thresh=es_thresh,
+                                    iteration = False
+                                    )
+    return (table, x, yfit)
+'''
 
 
 def create_fgsea_table_for_pair(
@@ -300,7 +350,7 @@ def create_fgsea_table_for_pair(
     if iteration:
         return table
 
-    return table, x, yfit
+    return (table, x, yfit)
 
 
 def process_scores(scores, pairs) -> pd.DataFrame:
