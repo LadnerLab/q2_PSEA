@@ -118,11 +118,7 @@ def make_psea_table(
                 dof = ro.NULL
             if not species_taxa_file:
                 taxa_access = "ID"
-
-            ''' 
-            -----------
-            Not working 
-            -----------
+            
             with concurrent.futures.ProcessPoolExecutor() as executor:
                 pair_futures = [executor.submit(create_fgsea_table_for_pair,
                                 pair,
@@ -138,67 +134,25 @@ def make_psea_table(
                                 dof,
                                 p_val_thresh,
                                 es_thresh,
-                                False
+                                False,
+                                table_dir
                                 ) for pair in pairs]
 
                 for future in concurrent.futures.as_completed(pair_futures):
                     result = future.result()
-                    table = result[0]
-                    x = result[1]
-                    y = result[2]
+                    x = result[0]
+                    yfit = result[1]
+                    table_prefix = result[2]
+                    pair = result[3]
 
                     pair_spline_dict["x"].extend(x.tolist())
                     pair_spline_dict["y"].extend(yfit.tolist())
                     pair_spline_dict["pair"].extend([table_prefix] * len(x))
                     used_pairs.append(pair)
 
-                    table.to_csv(
-                        f"{table_dir}/{table_prefix}_psea_table.tsv",
-                        sep="\t", index=False
-                    )
-
-                    taxa = table.loc[:, taxa_access].to_list()
+                    # taxa = table.loc[:, taxa_access].to_list()
 
                     titles.append(table_prefix)
-            '''
-
-            for pair in pairs:
-                table_prefix = f"{pair[0]}~{pair[1]}"
-
-                result = create_fgsea_table_for_pair(
-                                        pair=pair,
-                                        processed_scores=processed_scores,
-                                        pep_sets_file=pair_pep_sets_file_dict[ pair ],
-                                        species_taxa_file=species_taxa_file,
-                                        threshold=threshold,
-                                        permutation_num=permutation_num,
-                                        min_size=min_size,
-                                        max_size=max_size,
-                                        spline_type=spline_type,
-                                        degree=degree,
-                                        dof=dof,
-                                        p_val_thresh=p_val_thresh,
-                                        es_thresh=es_thresh,
-                                        iteration=False
-                                        )
-                table = result[0]
-                x = result[1]
-                yfit = result[2]
-
-                pair_spline_dict["x"].extend(x.tolist())
-                pair_spline_dict["y"].extend(yfit.tolist())
-                pair_spline_dict["pair"].extend([table_prefix] * len(x))
-                used_pairs.append(pair)
-
-                table.to_csv(
-                    f"{table_dir}/{table_prefix}_psea_table.tsv",
-                    sep="\t", index=False
-                )
-
-                taxa = table.loc[:, taxa_access].to_list()
-
-                titles.append(table_prefix)
-
 
             pd.DataFrame(used_pairs).to_csv(
                 f"{tempdir}/used_pairs.tsv", sep="\t",
@@ -242,50 +196,6 @@ def make_psea_table(
     return scatter_plot, volcano_plot
 
 
-'''
------------------------------------
-Tried to pass more simple arguments
------------------------------------
-def create_fgsea_table_helper(
-    pair,
-    processed_scores_file,
-    pep_sets_file,
-    species_taxa_file,
-    threshold,
-    permutation_num,
-    min_size,
-    max_size,
-    spline_type,
-    degree,
-    dof,
-    p_val_thresh,
-    es_thresh
-    ):
-    if not dof:
-        dof = ro.NULL
-
-    processed_scores = pd.read_csv(processed_scores_file, sep="\t", index_col=0)
-
-    table, x, yfit = create_fgsea_table_for_pair(
-                                    pair=pair,
-                                    processed_scores=processed_scores,
-                                    pep_sets_file=pep_sets_file,
-                                    species_taxa_file=species_taxa_file,
-                                    threshold=threshold,
-                                    permutation_num=permutation_num,
-                                    min_size=min_size,
-                                    max_size=max_size,
-                                    spline_type=spline_type,
-                                    degree=degree,
-                                    dof=dof,
-                                    p_val_thresh=p_val_thresh,
-                                    es_thresh=es_thresh,
-                                    iteration = False
-                                    )
-    return (table, x, yfit)
-'''
-
-
 def create_fgsea_table_for_pair(
     pair,
     processed_scores,
@@ -300,9 +210,12 @@ def create_fgsea_table_for_pair(
     dof,
     p_val_thresh,
     es_thresh,
-    iteration
+    iteration,
+    table_dir=""
     ):
     print(f"Working on pair ({pair[0]}, {pair[1]})...")
+
+    table_prefix = f"{pair[0]}~{pair[1]}"
 
     # each pair has a different peptide set file
     processed_scores, peptide_sets = utils.remove_peptides(
@@ -350,7 +263,12 @@ def create_fgsea_table_for_pair(
     if iteration:
         return table
 
-    return (table, x, yfit)
+    # Note: I had to write table here instead of main because of error with rpy2
+    table.to_csv(
+        f"{table_dir}/{table_prefix}_psea_table.tsv",
+        sep="\t", index=False
+                    )
+    return x, yfit, table_prefix, pair
 
 
 def process_scores(scores, pairs) -> pd.DataFrame:
