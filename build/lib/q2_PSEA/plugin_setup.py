@@ -34,13 +34,9 @@ plugin.pipelines.register_function(
         "max_size": Int,
         "permutation_num": Int,
         "spline_type": Str,
-        "degree": Int,
-        "dof": Int,
         "table_dir": Str,
-        "pepsirf_binary": Str,
-        "iterative_analysis": Bool,
-        "iter_tables_dir": Str,
-        "get_iter_tables": Bool
+        "threads": Int,
+        "pepsirf_binary": Str
     },
     parameter_descriptions={
         "scores_file": "Name of Z score matrix file.",
@@ -64,17 +60,9 @@ plugin.pipelines.register_function(
         "permutation_num": "Number of permutations. Minimal possible nominal"
             " p-value is about 1/perm.",
         "spline_type": "Specifies which spline operation to use.",
-        "degree": "Specifies the degree of the piecewise polynomial. Note: at"
-            " the moment, this will only affect the `cubic` spline approach.",
-        "dof": "Degree of freedom to use when fitting the spline. Note: at the"
-            " moment, this will only affect the `cubic` spline approach.",
         "table_dir": "Directory where resulting PSEA tables will be stored.",
-        "pepsirf_binary": "Path to pepsirf binary.",
-        "iterative_analysis": "Boolean value, whether or not to use iterative approach"
-                    " to filter cross-reactive peptides from less significant species."
-                    " GMT peptide_sets_file recommended.",
-        "iter_tables_dir": "Directory name to output iteration tables to.",
-        "get_iter_tables": "Boolean value, whether or not iteration tables should be outputted."
+        "threads": "Number of threads with which to run ssGSEA operation.",
+        "pepsirf_binary": "Path to pepsirf binary."
     },
     outputs=[("scatter_plot", Visualization), ("volcano_plot", Visualization)],
     output_descriptions={
