@@ -372,7 +372,8 @@ def run_iterative_peptide_analysis(
                             p_val_thresh,
                             es_thresh,
                             peptide_sets_out_dir,
-                            get_iter_tables
+                            get_iter_tables,
+                            iter_out_dir
                             ) for pair in pairs if sig_species_found_dict[pair]]
 
             # concurrent.futures.wait(pair_futures, timeout=None, return_when=concurrent.futures.ALL_COMPLETED)
@@ -408,7 +409,8 @@ def run_iterative_process_single_pair(
     p_val_thresh,
     es_thresh,
     peptide_sets_out_dir,
-    get_iter_tables
+    get_iter_tables,
+    iter_out_dir
     ):
     if not dof:
         dof = ro.NULL
