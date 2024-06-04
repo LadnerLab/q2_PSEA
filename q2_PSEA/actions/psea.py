@@ -9,6 +9,7 @@ import tempfile
 
 import time
 import concurrent.futures
+import multiprocessing
 
 from math import isnan, log, pow
 from rpy2.robjects import pandas2ri
@@ -39,7 +40,8 @@ def make_psea_table(
         pepsirf_binary="pepsirf",
         iterative_analysis=False,
         iter_tables_dir="./psea_iter_tables_outdir",
-        get_iter_tables=False
+        get_iter_tables=False,
+        max_workers=None
 ):    
     start_time = time.perf_counter()
 
@@ -99,7 +101,8 @@ def make_psea_table(
                 es_thresh=es_thresh,
                 peptide_sets_out_dir = temp_peptide_sets_dir,
                 iter_tables_dir=iter_tables_dir,
-                get_iter_tables=get_iter_tables
+                get_iter_tables=get_iter_tables,
+                max_workers=max_workers
             )
         else:
             # each pair will have the same gmt file
@@ -119,7 +122,7 @@ def make_psea_table(
             if not species_taxa_file:
                 taxa_access = "ID"
             
-            with concurrent.futures.ProcessPoolExecutor() as executor:
+            with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
                 pair_futures = [executor.submit(create_fgsea_table_for_pair,
                                 pair,
                                 processed_scores,
@@ -315,7 +318,8 @@ def run_iterative_peptide_analysis(
     es_thresh,
     peptide_sets_out_dir,
     iter_tables_dir,
-    get_iter_tables
+    get_iter_tables,
+    max_workers
     ) -> dict:
 
     iteration_num = 1
@@ -355,7 +359,7 @@ def run_iterative_peptide_analysis(
 
         # -------------------------------
         # note: rpy2 is not compatible with multithreading, only multiprocessing
-        with concurrent.futures.ProcessPoolExecutor() as executor:
+        with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
             pair_futures = [executor.submit(run_iterative_process_single_pair,
                             pair, 
                             tested_species_dict[pair], 

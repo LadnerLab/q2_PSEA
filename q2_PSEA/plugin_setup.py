@@ -40,7 +40,8 @@ plugin.pipelines.register_function(
         "pepsirf_binary": Str,
         "iterative_analysis": Bool,
         "iter_tables_dir": Str,
-        "get_iter_tables": Bool
+        "get_iter_tables": Bool,
+        "max_workers": Int
     },
     parameter_descriptions={
         "scores_file": "Name of Z score matrix file.",
@@ -74,7 +75,9 @@ plugin.pipelines.register_function(
                     " to filter cross-reactive peptides from less significant species."
                     " GMT peptide_sets_file recommended.",
         "iter_tables_dir": "Directory name to output iteration tables to.",
-        "get_iter_tables": "Boolean value, whether or not iteration tables should be outputted."
+        "get_iter_tables": "Boolean value, whether or not iteration tables should be outputted.",
+        "max_workers": "Maximum number of processes to run at a time. If none set,"
+                    " defaults to the number of processors on the machine."
     },
     outputs=[("scatter_plot", Visualization), ("volcano_plot", Visualization)],
     output_descriptions={
