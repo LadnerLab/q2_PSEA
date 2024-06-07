@@ -28,7 +28,7 @@ def make_psea_table(
         peptide_sets_file,
         threshold,
         p_val_thresh=0.05,
-        es_thresh=0.4,
+        nes_thresh=1,
         species_taxa_file="",
         min_size=15,
         max_size=2000,
@@ -98,7 +98,7 @@ def make_psea_table(
                 degree=degree,
                 dof=dof,
                 p_val_thresh=p_val_thresh,
-                es_thresh=es_thresh,
+                nes_thresh=nes_thresh,
                 peptide_sets_out_dir = temp_peptide_sets_dir,
                 iter_tables_dir=iter_tables_dir,
                 get_iter_tables=get_iter_tables,
@@ -136,7 +136,7 @@ def make_psea_table(
                                 degree,
                                 dof,
                                 p_val_thresh,
-                                es_thresh,
+                                nes_thresh,
                                 False,
                                 table_dir
                                 ) for pair in pairs]
@@ -186,7 +186,7 @@ def make_psea_table(
                 xy_dir=table_dir,
                 xy_access=["NES", "p.adjust"],
                 taxa_access=taxa_access,
-                x_threshold=es_thresh,
+                x_threshold=nes_thresh,
                 y_threshold=p_val_thresh,
                 xy_labels=["Enrichment score", "Adjusted p-values"],
                 titles=titles
@@ -212,7 +212,7 @@ def create_fgsea_table_for_pair(
     degree,
     dof,
     p_val_thresh,
-    es_thresh,
+    nes_thresh,
     iteration,
     table_dir=""
     ):
@@ -315,7 +315,7 @@ def run_iterative_peptide_analysis(
     degree,
     dof,
     p_val_thresh,
-    es_thresh,
+    nes_thresh,
     peptide_sets_out_dir,
     iter_tables_dir,
     get_iter_tables,
@@ -374,7 +374,7 @@ def run_iterative_peptide_analysis(
                             degree,
                             dof,
                             p_val_thresh,
-                            es_thresh,
+                            nes_thresh,
                             peptide_sets_out_dir,
                             get_iter_tables,
                             iter_out_dir
@@ -411,7 +411,7 @@ def run_iterative_process_single_pair(
     degree,
     dof,
     p_val_thresh,
-    es_thresh,
+    nes_thresh,
     peptide_sets_out_dir,
     get_iter_tables,
     iter_out_dir
@@ -439,7 +439,7 @@ def run_iterative_process_single_pair(
                                         degree=degree,
                                         dof=dof,
                                         p_val_thresh=p_val_thresh,
-                                        es_thresh=es_thresh,
+                                        nes_thresh=nes_thresh,
                                         iteration = True
                                         )
 
@@ -453,7 +453,7 @@ def run_iterative_process_single_pair(
     for index, row in table.iterrows():
 
         # test for significant species that has not already been used for this pair
-        if row["pvalue"] < p_val_thresh and np.absolute(row["enrichmentScore"]) > es_thresh \
+        if row["pvalue"] < p_val_thresh and np.absolute(row["NES"]) > nes_thresh \
                                     and row["ID"] not in tested_species:
 
             print(f"Found {row['species_name']} in {pair} to be significant")

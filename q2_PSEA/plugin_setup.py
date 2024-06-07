@@ -29,7 +29,7 @@ plugin.pipelines.register_function(
         "species_taxa_file": Str,
         "threshold": Float,
         "p_val_thresh": Float,
-        "es_thresh": Float,
+        "nes_thresh": Float,
         "min_size": Int,
         "max_size": Int,
         "permutation_num": Int,
@@ -57,7 +57,7 @@ plugin.pipelines.register_function(
             " considered in Gene Set Enrichment Analysis.",
         "p_val_thresh": "Specifies the value adjusted p-values must meet to be"
             " considered for highlighting in volcano and scatter plots.",
-        "es_thresh": "Specifies the value ",
+        "nes_thresh": "Specifies the value ",
         "min_size": "Minimum allowed number of peptides from peptide set also"
             " the data set.",
         "max_size": "Maximum allowed number of peptides from peptide set also"
