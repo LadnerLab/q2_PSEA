@@ -41,7 +41,8 @@ def make_psea_table(
         iterative_analysis=False,
         iter_tables_dir="./psea_iter_tables_outdir",
         get_iter_tables=False,
-        max_workers=None
+        max_workers=None,
+        taxa_matrix_out=""
 ):    
     start_time = time.perf_counter()
 
@@ -55,6 +56,8 @@ def make_psea_table(
     if iterative_analysis:
         assert ".gmt" in peptide_sets_file.lower(), \
             "You are running iterative analysis without a GMT peptide sets file."
+    assert max_workers <= multiprocessing.cpu_count(), \
+        f"Max workers excedes {multiprocessing.cpu_count()}, the number of CPUs on your machine."
 
     os.mkdir(table_dir)
 
@@ -109,6 +112,9 @@ def make_psea_table(
             pair_pep_sets_file_dict = dict.fromkeys(pairs, peptide_sets_file)
 
         with tempfile.TemporaryDirectory() as tempdir:
+            event_matrix = dict()
+            empty_pair_row = [0] * len(pairs)
+
             processed_scores.to_csv(processed_scores_file, sep="\t")
 
             titles = []
@@ -156,6 +162,26 @@ def make_psea_table(
                     # taxa = table.loc[:, taxa_access].to_list()
 
                     titles.append(table_prefix)
+
+                    if taxa_matrix_out:
+                        # populate event matrix with species that are significant this pair
+                        tableDf = pd.read_csv(f"{table_dir}/{table_prefix}_psea_table.tsv", sep="\t")
+                        for i, row in tableDf.iterrows():
+                            taxa = row[taxa_access]
+                            if taxa not in event_matrix.keys():
+                                event_matrix[taxa] = empty_pair_row.copy()
+
+                            if row["p.adjust"] < p_val_thresh and np.absolute(row["NES"]) > nes_thresh:
+                                event_matrix[taxa][pairs.index(pair)] = 1
+
+            if taxa_matrix_out:
+                event_matrix_df = pd.DataFrame.from_dict(event_matrix)
+                event_matrix_df.index = [f"{pair[0]}~{pair[1]}" for pair in pairs]
+                # sort rows and columns
+                event_matrix_df.sort_index(inplace=True)
+                sorted_cols = sorted(event_matrix_df.columns.tolist(), key=lambda col: event_matrix_df[col].sum(), reverse=True)
+                event_matrix_df = event_matrix_df[sorted_cols]
+                event_matrix_df.to_csv(taxa_matrix_out, sep="\t")
 
             pd.DataFrame(used_pairs).to_csv(
                 f"{tempdir}/used_pairs.tsv", sep="\t",
@@ -444,7 +470,7 @@ def run_iterative_process_single_pair(
                                         )
 
     # sort the table by ascending p-value (lowest on top)
-    table.sort_values(by=["pvalue"], ascending=True)
+    table.sort_values(by=["p.adjust"], ascending=True)
 
     if get_iter_tables:
         table.to_csv(f"{iter_out_dir}/{pair}.tsv", sep="\t")
@@ -453,7 +479,7 @@ def run_iterative_process_single_pair(
     for index, row in table.iterrows():
 
         # test for significant species that has not already been used for this pair
-        if row["pvalue"] < p_val_thresh and np.absolute(row["NES"]) > nes_thresh \
+        if row["p.adjust"] < p_val_thresh and np.absolute(row["NES"]) > nes_thresh \
                                     and row["ID"] not in tested_species:
 
             print(f"Found {row['species_name']} in {pair} to be significant")

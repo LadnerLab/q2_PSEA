@@ -41,7 +41,8 @@ plugin.pipelines.register_function(
         "iterative_analysis": Bool,
         "iter_tables_dir": Str,
         "get_iter_tables": Bool,
-        "max_workers": Int
+        "max_workers": Int,
+        "taxa_matrix_out": Str
     },
     parameter_descriptions={
         "scores_file": "Name of Z score matrix file.",
@@ -77,7 +78,9 @@ plugin.pipelines.register_function(
         "iter_tables_dir": "Directory name to output iteration tables to.",
         "get_iter_tables": "Boolean value, whether or not iteration tables should be outputted.",
         "max_workers": "Maximum number of processes to run at a time. If none set,"
-                    " defaults to the number of processors on the machine."
+                    " defaults to the number of processors on the machine.",
+        "taxa_matrix_out": "Filename of output taxa matrix with pairs as rows and taxa as columns."
+                    " Entries are filled with 1 if event is detected and 0 if not."
     },
     outputs=[("scatter_plot", Visualization), ("volcano_plot", Visualization)],
     output_descriptions={
