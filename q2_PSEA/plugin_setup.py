@@ -40,9 +40,11 @@ plugin.pipelines.register_function(
         "pepsirf_binary": Str,
         "iterative_analysis": Bool,
         "iter_tables_dir": Str,
-        "get_iter_tables": Bool,
         "max_workers": Int,
-        "taxa_matrix_out": Str
+        "event_summary": Bool,
+        "taxa_matrix_out": Str,
+        "positive_nes_vaes_out": Str,
+        "negative_nes_vaes_out": Str
     },
     parameter_descriptions={
         "scores_file": "Name of Z score matrix file.",
@@ -75,12 +77,14 @@ plugin.pipelines.register_function(
         "iterative_analysis": "Boolean value, whether or not to use iterative approach"
                     " to filter cross-reactive peptides from less significant species."
                     " GMT peptide_sets_file recommended.",
-        "iter_tables_dir": "Directory name to output iteration tables to.",
-        "get_iter_tables": "Boolean value, whether or not iteration tables should be outputted.",
+        "iter_tables_dir": "Directory name to output iteration tables to. Only generates if name is provided.",
         "max_workers": "Maximum number of processes to run at a time. If none set,"
                     " defaults to the number of processors on the machine.",
+        "event_summary": "Boolean value, whether or not to output summary data.",
         "taxa_matrix_out": "Filename of output taxa matrix with pairs as rows and taxa as columns."
-                    " Entries are filled with 1 if event is detected and 0 if not."
+                    " Entries are filled with 1 if event is detected and 0 if not.",
+        "positive_nes_vaes_out": "Output for total number of VAEs in the binary table for positive NES species",
+        "negative_nes_vaes_out": "Output for total number of VAEs in the binary table for negative NES species"
     },
     outputs=[("scatter_plot", Visualization), ("volcano_plot", Visualization)],
     output_descriptions={
