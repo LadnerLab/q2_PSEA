@@ -58,8 +58,9 @@ def make_psea_table(
     if iterative_analysis:
         assert ".gmt" in peptide_sets_file.lower(), \
             "You are running iterative analysis without a GMT peptide sets file."
-    assert max_workers <= multiprocessing.cpu_count(), \
-        f"Max workers excedes {multiprocessing.cpu_count()}, the number of CPUs on your machine."
+    if max_workers != None:
+        assert max_workers <= multiprocessing.cpu_count(), \
+            f"Max workers excedes {multiprocessing.cpu_count()}, the number of CPUs on your machine."
 
     os.mkdir(table_dir)
 
