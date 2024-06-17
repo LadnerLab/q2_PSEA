@@ -44,7 +44,8 @@ def make_psea_table(
         event_summary=True,
         taxa_matrix_out="taxa_matrix.tsv",
         positive_nes_vaes_out="Positive_NES_VAEs.txt",
-        negative_nes_vaes_out="Negative_NES_VAEs.txt"
+        negative_nes_vaes_out="Negative_NES_VAEs.txt",
+        seed=149
 ):    
     start_time = time.perf_counter()
 
@@ -107,7 +108,8 @@ def make_psea_table(
                 nes_thresh=nes_thresh,
                 peptide_sets_out_dir = temp_peptide_sets_dir,
                 iter_tables_dir=iter_tables_dir,
-                max_workers=max_workers
+                max_workers=max_workers,
+                seed=seed
             )
         else:
             # each pair will have the same gmt file
@@ -149,6 +151,7 @@ def make_psea_table(
                                 p_val_thresh,
                                 nes_thresh,
                                 False,
+                                seed,
                                 table_dir
                                 ) for pair in pairs]
 
@@ -282,6 +285,7 @@ def create_fgsea_table_for_pair(
     p_val_thresh,
     nes_thresh,
     iteration,
+    seed,
     table_dir=""
     ):
     print(f"Working on pair ({pair[0]}, {pair[1]})...")
@@ -326,7 +330,8 @@ def create_fgsea_table_for_pair(
         threshold,
         permutation_num,
         min_size,
-        max_size
+        max_size,
+        seed
     )
     with (ro.default_converter + pandas2ri.converter).context():
         table = ro.conversion.get_conversion().rpy2py(table)
@@ -386,7 +391,8 @@ def run_iterative_peptide_analysis(
     nes_thresh,
     peptide_sets_out_dir,
     iter_tables_dir,
-    max_workers
+    max_workers,
+    seed
     ) -> dict:
 
     iteration_num = 1
@@ -445,7 +451,8 @@ def run_iterative_peptide_analysis(
                             p_val_thresh,
                             nes_thresh,
                             peptide_sets_out_dir,
-                            iter_out_dir
+                            iter_out_dir,
+                            seed
                             ) for pair in pairs if sig_species_found_dict[pair]]
 
             # concurrent.futures.wait(pair_futures, timeout=None, return_when=concurrent.futures.ALL_COMPLETED)
@@ -481,7 +488,8 @@ def run_iterative_process_single_pair(
     p_val_thresh,
     nes_thresh,
     peptide_sets_out_dir,
-    iter_out_dir
+    iter_out_dir,
+    seed
     ):
     if not dof:
         dof = ro.NULL
@@ -507,7 +515,8 @@ def run_iterative_process_single_pair(
                                         dof=dof,
                                         p_val_thresh=p_val_thresh,
                                         nes_thresh=nes_thresh,
-                                        iteration = True
+                                        iteration = True,
+                                        seed=seed
                                         )
 
     # sort the table by ascending p-value (lowest on top)

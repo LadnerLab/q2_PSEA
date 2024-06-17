@@ -44,7 +44,8 @@ plugin.pipelines.register_function(
         "event_summary": Bool,
         "taxa_matrix_out": Str,
         "positive_nes_vaes_out": Str,
-        "negative_nes_vaes_out": Str
+        "negative_nes_vaes_out": Str,
+        "seed": Int
     },
     parameter_descriptions={
         "scores_file": "Name of Z score matrix file.",
@@ -84,7 +85,8 @@ plugin.pipelines.register_function(
         "taxa_matrix_out": "Filename of output taxa matrix with pairs as rows and taxa as columns."
                     " Entries are filled with 1 if event is detected and 0 if not.",
         "positive_nes_vaes_out": "Output for total number of VAEs in the binary table for positive NES species",
-        "negative_nes_vaes_out": "Output for total number of VAEs in the binary table for negative NES species"
+        "negative_nes_vaes_out": "Output for total number of VAEs in the binary table for negative NES species",
+        "seed": "Seed for permutation. Seed used to generate a random number for phenotype and gene_set permutations when running GSEA."
     },
     outputs=[("scatter_plot", Visualization), ("volcano_plot", Visualization)],
     output_descriptions={

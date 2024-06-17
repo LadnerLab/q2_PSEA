@@ -11,7 +11,8 @@ psea <- function(
         # code
         permutation_num = 10000,
         min_size,
-        max_size
+        max_size,
+        seed
 ) {
     library(clusterProfiler)
     peptide_sets <- peptide_sets[order(peptide_sets$gene), , drop=FALSE]
@@ -21,6 +22,7 @@ psea <- function(
     )
 
     term_to_gene <- peptide_sets[, c("term", "gene")]
+    set.seed(seed)
     out=GSEA(
         geneList=gene_list,
         TERM2GENE=term_to_gene,
