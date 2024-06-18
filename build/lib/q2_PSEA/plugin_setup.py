@@ -42,9 +42,10 @@ plugin.pipelines.register_function(
         "iter_tables_dir": Str,
         "max_workers": Int,
         "event_summary": Bool,
-        "taxa_matrix_out": Str,
-        "positive_nes_vaes_out": Str,
-        "negative_nes_vaes_out": Str,
+        "positive_nes_taxa_matrix_out": Str,
+        "negative_nes_taxa_matrix_out": Str,
+        "positive_nes_ae_out": Str,
+        "negative_nes_ae_out": Str,
         "seed": Int
     },
     parameter_descriptions={
@@ -82,10 +83,12 @@ plugin.pipelines.register_function(
         "max_workers": "Maximum number of processes to run at a time. If none set,"
                     " defaults to the number of processors on the machine.",
         "event_summary": "Boolean value, whether or not to output summary data.",
-        "taxa_matrix_out": "Filename of output taxa matrix with pairs as rows and taxa as columns."
+        "positive_nes_taxa_matrix_out": "Filename of output taxa matrix with pairs as rows and taxa as columns for positive NES species."
                     " Entries are filled with 1 if event is detected and 0 if not.",
-        "positive_nes_vaes_out": "Output for total number of VAEs in the binary table for positive NES species",
-        "negative_nes_vaes_out": "Output for total number of VAEs in the binary table for negative NES species",
+        "negative_nes_taxa_matrix_out": "Filename of output taxa matrix with pairs as rows and taxa as columns for negative NES species."
+                    " Entries are filled with 1 if event is detected and 0 if not.",
+        "positive_nes_ae_out": "Output for total number of antibody events in the binary table for positive NES species",
+        "negative_nes_ae_out": "Output for total number of antibody events in the binary table for negative NES species",
         "seed": "Seed for permutation. Seed used to generate a random number for phenotype and gene_set permutations when running GSEA."
     },
     outputs=[("scatter_plot", Visualization), ("volcano_plot", Visualization)],

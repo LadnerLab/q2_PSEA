@@ -42,9 +42,10 @@ def make_psea_table(
         iter_tables_dir="",
         max_workers=None,
         event_summary=True,
-        taxa_matrix_out="taxa_matrix.tsv",
-        positive_nes_vaes_out="Positive_NES_VAEs.txt",
-        negative_nes_vaes_out="Negative_NES_VAEs.txt",
+        positive_nes_taxa_matrix_out="Positive_NES_taxa_matrix.tsv",
+        negative_nes_taxa_matrix_out="Negative_NES_taxa_matrix.tsv",
+        positive_nes_ae_out="Positive_NES_AE.txt",
+        negative_nes_ae_out="Negative_NES_AE.txt",
         seed=149
 ):    
     start_time = time.perf_counter()
@@ -124,7 +125,9 @@ def make_psea_table(
             pair_pep_sets_file_dict = dict.fromkeys(pairs, peptide_sets_file)
 
         with tempfile.TemporaryDirectory() as tempdir:
-            event_matrix = dict()
+            pos_nes_event_matrix = dict()
+            neg_nes_event_matrix = dict()
+            zero_nes_event_matrix = dict()
             empty_pair_row = [0] * len(pairs)
             pos_nes_count_dict = dict()
             neg_nes_count_dict = dict()
@@ -179,45 +182,65 @@ def make_psea_table(
                         tableDf = pd.read_csv(f"{table_dir}/{table_prefix}_psea_table.tsv", sep="\t")
                         for i, row in tableDf.iterrows():
                             taxa = row[taxa_access]
-                            if taxa not in event_matrix.keys():
-                                event_matrix[taxa] = empty_pair_row.copy()
 
                             if row["p.adjust"] < p_val_thresh and np.absolute(row["NES"]) > nes_thresh:
-                                event_matrix[taxa][pairs.index(pair)] = 1
-
                                 if row["NES"] > 0:
+                                    if taxa not in pos_nes_event_matrix.keys():
+                                        pos_nes_event_matrix[taxa] = empty_pair_row.copy()
+                                    pos_nes_event_matrix[taxa][pairs.index(pair)] = 1
+
                                     if taxa not in pos_nes_count_dict.keys():
                                         pos_nes_count_dict[taxa] = 0
                                     pos_nes_count_dict[taxa] += 1
+
                                 elif row["NES"] < 0:
+                                    if taxa not in neg_nes_event_matrix.keys():
+                                        neg_nes_event_matrix[taxa] = empty_pair_row.copy()
+                                    neg_nes_event_matrix[taxa][pairs.index(pair)] = 1
+
                                     if taxa not in neg_nes_count_dict.keys():
                                         neg_nes_count_dict[taxa] = 0
                                     neg_nes_count_dict[taxa] += 1
+
                                 # output message if nes is 0
                                 else:
+                                    if taxa not in zero_nes_event_matrix.keys():
+                                        zero_nes_event_matrix[taxa] = empty_pair_row.copy()
+                                    zero_nes_event_matrix[taxa][pairs.index(pair)] = 1
+
                                     if taxa not in zero_nes_count_dict.keys():
                                         zero_nes_count_dict[taxa] = 0
                                     zero_nes_count_dict[taxa] += 1
 
             if event_summary:
-                event_matrix_df = pd.DataFrame.from_dict(event_matrix)
-                event_matrix_df.index = [f"{pair[0]}~{pair[1]}" for pair in pairs]
-                # sort rows and columns
-                event_matrix_df.sort_index(inplace=True)
-                sorted_cols = sorted(event_matrix_df.columns.tolist(), key=lambda col: event_matrix_df[col].sum(), reverse=True)
-                event_matrix_df = event_matrix_df[sorted_cols]
-                event_matrix_df.to_csv(taxa_matrix_out, sep="\t")
+                pos_nes_event_matrix_df = pd.DataFrame.from_dict(pos_nes_event_matrix)
+                pos_nes_event_matrix_df.index = [f"{pair[0]}~{pair[1]}" for pair in pairs]
+                pos_nes_event_matrix_df.sort_index(inplace=True)
+                pos_nes_event_matrix_df = pos_nes_event_matrix_df[sorted(pos_nes_event_matrix_df.columns.tolist(), key=lambda col: pos_nes_event_matrix_df[col].sum(), reverse=True)]
+                pos_nes_event_matrix_df.to_csv(positive_nes_taxa_matrix_out, sep="\t")
+
+                neg_nes_event_matrix_df = pd.DataFrame.from_dict(neg_nes_event_matrix)
+                neg_nes_event_matrix_df.index = [f"{pair[0]}~{pair[1]}" for pair in pairs]
+                neg_nes_event_matrix_df.sort_index(inplace=True)
+                neg_nes_event_matrix_df = neg_nes_event_matrix_df[sorted(neg_nes_event_matrix_df.columns.tolist(), key=lambda col: neg_nes_event_matrix_df[col].sum(), reverse=True)]
+                neg_nes_event_matrix_df.to_csv(negative_nes_taxa_matrix_out, sep="\t")
 
                 pos_nes_count_dict = {k:v for k, v in sorted(pos_nes_count_dict.items(), key=lambda item: item[1], reverse=True)}
-                neg_nes_count_dict = {k:v for k, v in sorted(neg_nes_count_dict.items(), key=lambda item: item[1], reverse=True)}
+                neg_nes_count_dict = {k:v for k, v in sorted(neg_nes_count_dict.items(), key=lambda item: item[1], reverse=True)
+                }
+
+                zero_nes_count_dict["test"] = 1
+                zero_nes_event_matrix["test"] = empty_pair_row.copy()
+                zero_nes_event_matrix["test"][0] = 1
+
                 # create column sums for positive and negative NES
-                with open(positive_nes_vaes_out, "w") as pos_file:
+                with open(positive_nes_ae_out, "w") as pos_file:
                     for taxa in pos_nes_count_dict.keys():
                         if pos_nes_count_dict[taxa] > 1:
                             pos_file.write(f"{pos_nes_count_dict[taxa]} events for {taxa}\n")
                         else:
                             pos_file.write(f"{pos_nes_count_dict[taxa]} event for {taxa}\n")
-                with open(negative_nes_vaes_out, "w") as neg_file:
+                with open(negative_nes_ae_out, "w") as neg_file:
                     for taxa in neg_nes_count_dict.keys():
                         if neg_nes_count_dict[taxa] > 1:
                             neg_file.write(f"{neg_nes_count_dict[taxa]} events for {taxa}\n")
@@ -230,6 +253,10 @@ def make_psea_table(
                             print(f"{zero_nes_count_dict[taxa]} events for {taxa}, which has an NES of 0")
                         else:
                             print(f"{zero_nes_count_dict[taxa]} event for {taxa}, which has an NES of 0")
+                        print("The pairs which this occurred are: ")
+                        for pair_index in range(len(zero_nes_event_matrix[taxa])):
+                            if zero_nes_event_matrix[taxa][pair_index] == 1:
+                                print(f"{pairs[pair_index][0]}~{pairs[pair_index][1]}")
 
             pd.DataFrame(used_pairs).to_csv(
                 f"{tempdir}/used_pairs.tsv", sep="\t",
