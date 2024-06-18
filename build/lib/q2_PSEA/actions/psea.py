@@ -65,11 +65,19 @@ def make_psea_table(
 
     os.mkdir(table_dir)
 
+    pairs = list()
+    pair_2_title = dict()
     with open(pairs_file, "r") as fh:
-        pairs = [
-            tuple(line.replace("\n", "").split("\t"))
-            for line in fh.readlines()
-        ]
+        for line in fh.readlines():
+            line_tup = tuple(line.replace("\n", "").split("\t"))
+            pair = line_tup[0:2]
+            pairs.append(pair)
+
+            if( len(line_tup) > 2):
+                pair_2_title[pair] = line_tup[2]
+            else:
+                pair_2_title[pair] = ""
+
     scores = pd.read_csv(scores_file, sep="\t", index_col=0)
     processed_scores = process_scores(scores, pairs)
 
@@ -124,7 +132,6 @@ def make_psea_table(
 
             processed_scores.to_csv(processed_scores_file, sep="\t")
 
-            titles = []
             taxa_access = "species_name"
             used_pairs = []
             pair_spline_dict = { "x": list(), "y": list(), "pair": list() }
@@ -165,11 +172,7 @@ def make_psea_table(
                     pair_spline_dict["x"].extend(x.tolist())
                     pair_spline_dict["y"].extend(yfit.tolist())
                     pair_spline_dict["pair"].extend([table_prefix] * len(x))
-                    used_pairs.append(pair)
-
-                    # taxa = table.loc[:, taxa_access].to_list()
-
-                    titles.append(table_prefix)
+                    used_pairs.append((pair[0], pair[1], pair_2_title[pair]))
 
                     if event_summary:
                         # populate event matrix with species that are significant this pair
@@ -260,7 +263,7 @@ def make_psea_table(
                 x_threshold=nes_thresh,
                 y_threshold=p_val_thresh,
                 xy_labels=["Enrichment score", "Adjusted p-values"],
-                titles=titles
+                pairs_file=f"{tempdir}/used_pairs.tsv"
             )
 
     end_time = time.perf_counter()
