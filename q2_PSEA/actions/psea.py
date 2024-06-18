@@ -229,10 +229,6 @@ def make_psea_table(
                 neg_nes_count_dict = {k:v for k, v in sorted(neg_nes_count_dict.items(), key=lambda item: item[1], reverse=True)
                 }
 
-                zero_nes_count_dict["test"] = 1
-                zero_nes_event_matrix["test"] = empty_pair_row.copy()
-                zero_nes_event_matrix["test"][0] = 1
-
                 # create column sums for positive and negative NES
                 with open(positive_nes_ae_out, "w") as pos_file:
                     for taxa in pos_nes_count_dict.keys():
