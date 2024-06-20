@@ -138,7 +138,7 @@ def make_psea_table(
             processed_scores.to_csv(processed_scores_file, sep="\t")
 
             taxa_access = "species_name"
-            used_pairs = []
+            # used_pairs = []
             pair_spline_dict = { "x": list(), "y": list(), "pair": list() }
 
 
@@ -177,7 +177,7 @@ def make_psea_table(
                     pair_spline_dict["x"].extend(x.tolist())
                     pair_spline_dict["y"].extend(yfit.tolist())
                     pair_spline_dict["pair"].extend([table_prefix] * len(x))
-                    used_pairs.append((pair[0], pair[1], pair_2_title[pair]))
+                    # used_pairs.append((pair[0], pair[1], pair_2_title[pair]))
 
                     if event_summary:
                         # populate event matrix with species that are significant this pair
@@ -255,11 +255,12 @@ def make_psea_table(
                         for pair_index in range(len(zero_nes_event_matrix[taxa])):
                             if zero_nes_event_matrix[taxa][pair_index] == 1:
                                 print(f"{pairs[pair_index][0]}~{pairs[pair_index][1]}")
-
+            '''
             pd.DataFrame(used_pairs).to_csv(
                 f"{tempdir}/used_pairs.tsv", sep="\t",
                 header=False, index=False
             )
+            '''
             pd.DataFrame(pair_spline_dict).to_csv(
                 f"{tempdir}/spline_data.tsv", sep="\t", index=False
             )
@@ -272,7 +273,7 @@ def make_psea_table(
         
             scatter_plot, = zscatter(
                 zscores=processed_scores_art,
-                pairs_file=f"{tempdir}/used_pairs.tsv",
+                pairs_file=pairs_file,
                 spline_file=f"{tempdir}/spline_data.tsv",
                 p_val_access="p.adjust",
                 le_peps_access="core_enrichment",
@@ -288,7 +289,7 @@ def make_psea_table(
                 x_threshold=nes_thresh,
                 y_threshold=p_val_thresh,
                 xy_labels=["Enrichment score", "Adjusted p-values"],
-                pairs_file=f"{tempdir}/used_pairs.tsv"
+                pairs_file=pairs_file
             )
 
     end_time = time.perf_counter()

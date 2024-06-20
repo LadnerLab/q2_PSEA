@@ -272,7 +272,7 @@ def make_psea_table(
         
             scatter_plot, = zscatter(
                 zscores=processed_scores_art,
-                pairs_file=f"{tempdir}/used_pairs.tsv",
+                pairs_file=pairs_file,
                 spline_file=f"{tempdir}/spline_data.tsv",
                 p_val_access="p.adjust",
                 le_peps_access="core_enrichment",
@@ -288,7 +288,7 @@ def make_psea_table(
                 x_threshold=nes_thresh,
                 y_threshold=p_val_thresh,
                 xy_labels=["Enrichment score", "Adjusted p-values"],
-                pairs_file=f"{tempdir}/used_pairs.tsv"
+                pairs_file=pairs_file
             )
 
     end_time = time.perf_counter()
