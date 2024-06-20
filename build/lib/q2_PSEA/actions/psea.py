@@ -69,6 +69,8 @@ def make_psea_table(
     pairs = list()
     pair_2_title = dict()
     with open(pairs_file, "r") as fh:
+        # skip header line
+        fh.readline()
         for line in fh.readlines():
             line_tup = tuple(line.replace("\n", "").split("\t"))
             pair = line_tup[0:2]
@@ -228,10 +230,6 @@ def make_psea_table(
                 pos_nes_count_dict = {k:v for k, v in sorted(pos_nes_count_dict.items(), key=lambda item: item[1], reverse=True)}
                 neg_nes_count_dict = {k:v for k, v in sorted(neg_nes_count_dict.items(), key=lambda item: item[1], reverse=True)
                 }
-
-                zero_nes_count_dict["test"] = 1
-                zero_nes_event_matrix["test"] = empty_pair_row.copy()
-                zero_nes_event_matrix["test"][0] = 1
 
                 # create column sums for positive and negative NES
                 with open(positive_nes_ae_out, "w") as pos_file:

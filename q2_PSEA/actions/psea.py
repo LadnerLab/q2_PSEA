@@ -69,6 +69,8 @@ def make_psea_table(
     pairs = list()
     pair_2_title = dict()
     with open(pairs_file, "r") as fh:
+        # skip header line
+        fh.readline()
         for line in fh.readlines():
             line_tup = tuple(line.replace("\n", "").split("\t"))
             pair = line_tup[0:2]
