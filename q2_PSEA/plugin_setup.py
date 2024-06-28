@@ -41,11 +41,7 @@ plugin.pipelines.register_function(
         "iterative_analysis": Bool,
         "iter_tables_dir": Str,
         "max_workers": Int,
-        "event_summary": Bool,
-        "positive_nes_taxa_matrix_out": Str,
-        "negative_nes_taxa_matrix_out": Str,
-        "positive_nes_ae_out": Str,
-        "negative_nes_ae_out": Str,
+        "summary_tables_dir": Str,
         "seed": Int
     },
     parameter_descriptions={
@@ -82,23 +78,18 @@ plugin.pipelines.register_function(
         "iter_tables_dir": "Directory name to output iteration tables to. Only generates if name is provided.",
         "max_workers": "Maximum number of processes to run at a time. If none set,"
                     " defaults to the number of processors on the machine.",
-        "event_summary": "Boolean value, whether or not to output summary data.",
-        "positive_nes_taxa_matrix_out": "Filename of output taxa matrix with pairs as rows and taxa as columns for positive NES species."
-                    " Entries are filled with 1 if event is detected and 0 if not.",
-        "negative_nes_taxa_matrix_out": "Filename of output taxa matrix with pairs as rows and taxa as columns for negative NES species."
-                    " Entries are filled with 1 if event is detected and 0 if not.",
-        "positive_nes_ae_out": "Output for total number of antibody events in the binary table for positive NES species",
-        "negative_nes_ae_out": "Output for total number of antibody events in the binary table for negative NES species",
+        "summary_tables_dir": "Directory to save antibody event summary tables.",
         "seed": "Seed for permutation. Seed used to generate a random number for phenotype and gene_set permutations when running GSEA."
     },
-    outputs=[("scatter_plot", Visualization), ("volcano_plot", Visualization)],
+    outputs=[("scatter_plot", Visualization), ("volcano_plot", Visualization), ("ae_plots", Visualization)],
     output_descriptions={
         "scatter_plot": "Name of plot file visualization comparison between"
             " two samples. This plot includes the smooth spline fit to the"
             " given data and highlights the leading edge peptides for all"
             " significant taxa.",
         "volcano_plot": "Name of plot file visualization comparison between"
-            " enrichment scores (ES) and p-values."
+            " enrichment scores (ES) and p-values.",
+        "ae_plots": "Name of plot of visualization for event summary, if created."
     },
     name="Make PSEA Table",
     description="Qiime2 plug-in which provides a Python wrapper around R"
