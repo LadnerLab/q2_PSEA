@@ -27,6 +27,7 @@ plugin.pipelines.register_function(
         "pairs_file": Str,
         "peptide_sets_file": Str,
         "species_taxa_file": Str,
+        "species_color_file": Str,
         "threshold": Float,
         "p_val_thresh": Float,
         "nes_thresh": Float,
@@ -54,6 +55,8 @@ plugin.pipelines.register_function(
             " format.",
         "species_taxa_file": "Name of tab-delimited file containing species"
             " name and taxanomy ID associations.",
+        "species_color_file": "Name of tab-delimited file containing species"
+            " name and HEX color code for that species to appear on the output charts.",
         "threshold": "Minimum Z score a peptide must maintain to be"
             " considered in Gene Set Enrichment Analysis.",
         "p_val_thresh": "Specifies the value adjusted p-values must meet to be"

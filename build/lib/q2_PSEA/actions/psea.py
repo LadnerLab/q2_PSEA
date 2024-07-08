@@ -30,6 +30,7 @@ def make_psea_table(
         p_val_thresh=0.05,
         nes_thresh=1,
         species_taxa_file="",
+        species_color_file="",
         min_size=15,
         max_size=2000,
         permutation_num=10000,  # as per original PSEA code
@@ -274,7 +275,8 @@ def make_psea_table(
                 le_peps_access="core_enrichment",
                 taxa_access=taxa_access,
                 highlight_data=table_dir,
-                highlight_threshold=p_val_thresh
+                highlight_threshold=p_val_thresh,
+                colors_file=species_color_file
             )
 
             volcano_plot, = volcano(
@@ -284,14 +286,16 @@ def make_psea_table(
                 x_threshold=nes_thresh,
                 y_threshold=p_val_thresh,
                 xy_labels=["Enrichment score", "Adjusted p-values"],
-                pairs_file=pairs_file
+                pairs_file=pairs_file,
+                colors_file=species_color_file
             )
 
             ae_plot, = aeplots( 
                 pos_nes_ae_file=os.path.join(summary_tables_dir, "Positive_NES_AE.tsv"),
                 neg_nes_ae_file=os.path.join(summary_tables_dir, "Negative_NES_AE.tsv"),
                 xy_access=["Events", "Species"],
-                xy_labels=["Number of AEs in cohort", "Species"]
+                xy_labels=["Number of AEs in cohort", "Species"],
+                colors_file=species_color_file
             )
 
     end_time = time.perf_counter()
